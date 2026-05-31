@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum DoerTier {
+  BRONZE
+  SILVER
+  GOLD
+}
+
+enum KycStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TaskStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum PaymentMode {
+  ESCROW
+  CASH
+}
+
+enum EscrowStatus {
+  PENDING
+  HELD
+  RELEASED
+  REFUNDED
+  DISPUTED
+}
+
+enum PayoutMethod {
+  BANK
+  MOBILE_WALLET
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  CLOSED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+}
+
+enum NotificationType {
+  TASK_POSTED
+  TASK_ACCEPTED
+  TASK_COMPLETED
+  TASK_CONFIRMED
+  TASK_CANCELLED
+  TASK_DISPUTED
+  NEW_MESSAGE
+  PAYMENT_RELEASED
+  KYC_APPROVED
+  KYC_REJECTED
+  RATING_RECEIVED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  phone       String   @unique
+  name        String?
+  email       String?  @unique
+  avatarUrl   String?
+  isDoer      Boolean  @default(false)
+  isPoster    Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  isBanned    Boolean  @default(false)
+  fcmToken    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doerProfile     DoerProfile?
+  postedTasks     Task[]         @relation("PosterTasks")
+  acceptedTasks   Task[]         @relation("DoerTasks")
+  sentMessages    Message[]
+  ratingsGiven    Rating[]       @relation("RaterRatings")
+  ratingsReceived Rating[]       @relation("RateeRatings")
+  notifications   Notification[]
+  disputesRaised  Dispute[]
+  otpTokens       OtpToken[]
+}
+
+model OtpToken {
+  id        String   @id @default(uuid())
+  userId    String
+  phone     String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model DoerProfile {
+  id                 String    @id @default(uuid())
+  userId             String    @unique
+  tier               DoerTier  @default(BRONZE)
+  kycStatus          KycStatus @default(PENDING)
+  nicPhotoUrl        String?
+  selfieUrl          String?
+  addressProofUrl    String?
+  policeClearanceUrl String?
+  drivingLicenseUrl  String?
+  skillProofUrl      String?
+  ref1Name           String?
+  ref1Phone          String?
+  ref2Name           String?
+  ref2Phone          String?
+  totalJobsCompleted Int       @default(0)
+  avgRating          Float     @default(0)
+  onTimeRate         Float     @default(0)
+  kycReviewedAt      DateTime?
+  kycReviewNote      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id])
+  kycReviews KycReview[]
+}
+
+model KycReview {
+  id            String      @id @default(uuid())
+  doerProfileId String
+  reviewerPhone String
+  action        KycStatus
+  note          String?
+  createdAt     DateTime    @default(now())
+
+  doerProfile DoerProfile @relation(fields: [doerProfileId], references: [id])
+}
+
+model Category {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  nameEn    String
+  nameSi    String?
+  nameTa    String?
+  iconUrl   String?
+  minTier   DoerTier @default(BRONZE)
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+}
+
+model Task {
+  id                 String      @id @default(uuid())
+  posterId           String
+  categoryId         String
+  title              String
+  description        String
+  photoUrls          String[]
+  locationLat        Float
+  locationLng        Float
+  locationAddress    String
+  budget             Decimal     @db.Decimal(10, 2)
+  paymentMode        PaymentMode @default(ESCROW)
+  requiredTier       DoerTier    @default(BRONZE)
+  status             TaskStatus  @default(OPEN)
+  scheduledStart     DateTime?
+  scheduledEnd       DateTime?
+  doerId             String?
+  acceptedAt         DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  completionPhotoUrl String?
+  confirmedAt        DateTime?
+  isFeatured         Boolean     @default(false)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  poster        User           @relation("PosterTasks", fields: [posterId], references: [id])
+  doer          User?          @relation("DoerTasks", fields: [doerId], references: [id])
+  category      Category       @relation(fields: [categoryId], references: [id])
+  escrow        Escrow?
+  ratings       Rating[]
+  messages      Message[]
+  dispute       Dispute?
+  notifications Notification[]
+}
+
+model Escrow {
+  id                    String       @id @default(uuid())
+  taskId                String       @unique
+  posterId              String
+  doerId                String?
+  taskBudget            Decimal      @db.Decimal(10, 2)
+  platformFeeFromPoster Decimal      @db.Decimal(10, 2)
+  platformFeeFromDoer   Decimal      @db.Decimal(10, 2)
+  trustFundReserve      Decimal      @db.Decimal(10, 2)
+  netDoerPayout         Decimal?     @db.Decimal(10, 2)
+  payherePaymentId      String?
+  payhereOrderId        String?
+  status                EscrowStatus @default(PENDING)
+  payoutMethod          PayoutMethod @default(BANK)
+  heldAt                DateTime?
+  releasedAt            DateTime?
+  refundedAt            DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id])
+}
+
+model Rating {
+  id        String   @id @default(uuid())
+  taskId    String
+  raterId   String
+  rateeId   String
+  score     Int
+  comment   String?
+  isOnTime  Boolean?
+  createdAt DateTime @default(now())
+
+  task  Task @relation(fields: [taskId], references: [id])
+  rater User @relation("RaterRatings", fields: [raterId], references: [id])
+  ratee User @relation("RateeRatings", fields: [rateeId], references: [id])
+
+  @@unique([taskId, raterId])
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  taskId    String
+  senderId  String
+  content   String
+  type      MessageType @default(TEXT)
+  readAt    DateTime?
+  createdAt DateTime    @default(now())
+
+  task   Task @relation(fields: [taskId], references: [id])
+  sender User @relation(fields: [senderId], references: [id])
+}
+
+model Dispute {
+  id              String        @id @default(uuid())
+  taskId          String        @unique
+  raisedById      String
+  reason          String
+  status          DisputeStatus @default(OPEN)
+  resolutionNote  String?
+  resolvedByPhone String?
+  createdAt       DateTime      @default(now())
+  resolvedAt      DateTime?
+
+  task     Task @relation(fields: [taskId], references: [id])
+  raisedBy User @relation(fields: [raisedById], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  taskId    String?
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User  @relation(fields: [userId], references: [id])
+  task Task? @relation(fields: [taskId], references: [id])
+}

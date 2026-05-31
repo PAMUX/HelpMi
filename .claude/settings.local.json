@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"D:\\\\MYSTUFF\\\\HelpMi\\\\backend\"; npx tsc --noEmit 2>&1; echo \"Exit: $LASTEXITCODE\")"
+    ]
+  }
+}

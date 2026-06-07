@@ -14,6 +14,7 @@ const config_1 = require("@nestjs/config");
 const auth_service_js_1 = require("./auth.service.js");
 const auth_controller_js_1 = require("./auth.controller.js");
 const jwt_strategy_js_1 = require("./strategies/jwt.strategy.js");
+const sms_provider_js_1 = require("./providers/sms.provider.js");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -30,7 +31,7 @@ exports.AuthModule = AuthModule = __decorate([
                 }),
             }),
         ],
-        providers: [auth_service_js_1.AuthService, jwt_strategy_js_1.JwtStrategy],
+        providers: [auth_service_js_1.AuthService, jwt_strategy_js_1.JwtStrategy, sms_provider_js_1.smsProviderFactory],
         controllers: [auth_controller_js_1.AuthController],
         exports: [jwt_1.JwtModule],
     })

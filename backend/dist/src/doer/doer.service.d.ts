@@ -1,5 +1,6 @@
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SubmitKycDto } from './dto/submit-kyc.dto.js';
+import { PayoutMethodDto } from './dto/payout-method.dto.js';
 export declare class DoerService {
     private prisma;
     constructor(prisma: PrismaService);
@@ -29,6 +30,13 @@ export declare class DoerService {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
@@ -52,12 +60,64 @@ export declare class DoerService {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
         kycReviewedAt: Date | null;
         kycReviewNote: string | null;
     }>;
+    setPayoutMethod(userId: string, dto: PayoutMethodDto): Promise<{
+        id: string;
+        createdAt: Date;
+        updatedAt: Date;
+        userId: string;
+        tier: import("@prisma/client").$Enums.DoerTier;
+        kycStatus: import("@prisma/client").$Enums.KycStatus;
+        nicPhotoUrl: string | null;
+        selfieUrl: string | null;
+        addressProofUrl: string | null;
+        policeClearanceUrl: string | null;
+        drivingLicenseUrl: string | null;
+        skillProofUrl: string | null;
+        ref1Name: string | null;
+        ref1Phone: string | null;
+        ref2Name: string | null;
+        ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
+        totalJobsCompleted: number;
+        avgRating: number;
+        onTimeRate: number;
+        kycReviewedAt: Date | null;
+        kycReviewNote: string | null;
+    }>;
+    getPayouts(userId: string): import("@prisma/client").Prisma.PrismaPromise<{
+        id: string;
+        createdAt: Date;
+        method: import("@prisma/client").$Enums.PayoutMethod;
+        updatedAt: Date;
+        taskId: string;
+        escrowId: string;
+        doerId: string;
+        amount: import("@prisma/client-runtime-utils").Decimal;
+        status: import("@prisma/client").$Enums.PayoutStatus;
+        providerRef: string | null;
+        failureReason: string | null;
+        destinationSnapshot: import("@prisma/client/runtime/client").JsonValue | null;
+        paidAt: Date | null;
+    }[]>;
     getMyTasks(userId: string): Promise<({
         category: {
             minTier: import("@prisma/client").$Enums.DoerTier;
@@ -74,16 +134,18 @@ export declare class DoerService {
         poster: {
             id: string;
             name: string | null;
-            phone: string;
+            avatarUrl: string | null;
         };
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -91,10 +153,8 @@ export declare class DoerService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;

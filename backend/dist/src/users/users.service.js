@@ -63,6 +63,43 @@ let UsersService = class UsersService {
             throw new common_1.NotFoundException('User not found');
         return user;
     }
+    async exportMe(id) {
+        const user = await this.prisma.user.findUnique({
+            where: { id },
+            include: {
+                doerProfile: true,
+                postedTasks: true,
+                acceptedTasks: true,
+                ratingsGiven: true,
+                ratingsReceived: true,
+                notifications: true,
+                sentMessages: true,
+                disputesRaised: true,
+            },
+        });
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        const payouts = await this.prisma.payout.findMany({ where: { doerId: id } });
+        return { exportedAt: new Date().toISOString(), user, payouts };
+    }
+    async deleteMe(id) {
+        const user = await this.prisma.user.findUnique({ where: { id } });
+        if (!user)
+            throw new common_1.NotFoundException('User not found');
+        await this.prisma.user.update({
+            where: { id },
+            data: {
+                deletedAt: new Date(),
+                isActive: false,
+                name: null,
+                email: null,
+                avatarUrl: null,
+                fcmToken: null,
+                phone: `deleted-${id}`,
+            },
+        });
+        return { deleted: true };
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([

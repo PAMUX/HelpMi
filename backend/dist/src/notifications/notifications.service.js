@@ -8,14 +8,21 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotificationsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_js_1 = require("../prisma/prisma.service.js");
+const push_provider_js_1 = require("./providers/push.provider.js");
 let NotificationsService = class NotificationsService {
     prisma;
-    constructor(prisma) {
+    push;
+    logger = new common_1.Logger('NotificationsService');
+    constructor(prisma, push) {
         this.prisma = prisma;
+        this.push = push;
     }
     async getForUser(userId) {
         return this.prisma.notification.findMany({
@@ -43,22 +50,36 @@ let NotificationsService = class NotificationsService {
         return { unreadCount: count };
     }
     async send(userId, type, title, body, taskId, data) {
-        const notification = await this.prisma.notification.create({
-            data: { userId, type, title, body, taskId, data },
-        });
-        const user = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { fcmToken: true },
-        });
-        if (user?.fcmToken) {
-            console.log(`[FCM] → ${user.fcmToken}: ${title} — ${body}`);
+        try {
+            const notification = await this.prisma.notification.create({
+                data: { userId, type, title, body, taskId, data: data },
+            });
+            const user = await this.prisma.user.findUnique({
+                where: { id: userId },
+                select: { fcmToken: true },
+            });
+            if (user?.fcmToken) {
+                await this.push.sendToToken(user.fcmToken, {
+                    title,
+                    body,
+                    data: { type, ...(taskId ? { taskId } : {}) },
+                });
+            }
+            return notification;
         }
-        return notification;
+        catch (err) {
+            this.logger.error(`Failed to send notification to ${userId}: ${err.message}`);
+            return null;
+        }
+    }
+    async sendToMany(userIds, type, title, body, taskId, data) {
+        await Promise.all(userIds.map((id) => this.send(id, type, title, body, taskId, data)));
     }
 };
 exports.NotificationsService = NotificationsService;
 exports.NotificationsService = NotificationsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService])
+    __param(1, (0, common_1.Inject)(push_provider_js_1.PUSH_PROVIDER)),
+    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService, Object])
 ], NotificationsService);
 //# sourceMappingURL=notifications.service.js.map

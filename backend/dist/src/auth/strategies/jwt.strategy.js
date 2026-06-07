@@ -28,7 +28,7 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
     }
     async validate(payload) {
         const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-        if (!user || !user.isActive || user.isBanned) {
+        if (!user || !user.isActive || user.isBanned || user.deletedAt) {
             throw new common_1.UnauthorizedException();
         }
         return { id: user.id, phone: user.phone };

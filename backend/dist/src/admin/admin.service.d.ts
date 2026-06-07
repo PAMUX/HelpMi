@@ -1,7 +1,12 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { PayoutService } from '../payments/payout.service.js';
+type PayoutStatusFilter = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
 export declare class AdminService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private events;
+    private payouts;
+    constructor(prisma: PrismaService, events: EventEmitter2, payouts: PayoutService);
     getPendingKyc(): import("@prisma/client").Prisma.PrismaPromise<({
         user: {
             id: string;
@@ -26,6 +31,13 @@ export declare class AdminService {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
@@ -49,6 +61,13 @@ export declare class AdminService {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
@@ -72,6 +91,13 @@ export declare class AdminService {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
@@ -96,6 +122,7 @@ export declare class AdminService {
         isPoster: boolean;
         isBanned: boolean;
         fcmToken: string | null;
+        deletedAt: Date | null;
         updatedAt: Date;
     })[]>;
     banUser(userId: string): Promise<{
@@ -110,6 +137,7 @@ export declare class AdminService {
         isPoster: boolean;
         isBanned: boolean;
         fcmToken: string | null;
+        deletedAt: Date | null;
         updatedAt: Date;
     }>;
     unbanUser(userId: string): Promise<{
@@ -124,6 +152,7 @@ export declare class AdminService {
         isPoster: boolean;
         isBanned: boolean;
         fcmToken: string | null;
+        deletedAt: Date | null;
         updatedAt: Date;
     }>;
     getDisputes(status?: 'OPEN' | 'RESOLVED' | 'CLOSED'): import("@prisma/client").Prisma.PrismaPromise<({
@@ -161,6 +190,37 @@ export declare class AdminService {
     resolveDispute(disputeId: string, adminPhone: string, resolutionNote: string, refundPoster: boolean): Promise<{
         resolved: boolean;
     }>;
+    listPayouts(status?: PayoutStatusFilter): import("@prisma/client").Prisma.PrismaPromise<{
+        id: string;
+        createdAt: Date;
+        method: import("@prisma/client").$Enums.PayoutMethod;
+        updatedAt: Date;
+        taskId: string;
+        escrowId: string;
+        doerId: string;
+        amount: import("@prisma/client-runtime-utils").Decimal;
+        status: import("@prisma/client").$Enums.PayoutStatus;
+        providerRef: string | null;
+        failureReason: string | null;
+        destinationSnapshot: import("@prisma/client/runtime/client").JsonValue | null;
+        paidAt: Date | null;
+    }[]>;
+    markPayoutPaid(payoutId: string, providerRef?: string): Promise<{
+        id: string;
+        createdAt: Date;
+        method: import("@prisma/client").$Enums.PayoutMethod;
+        updatedAt: Date;
+        taskId: string;
+        escrowId: string;
+        doerId: string;
+        amount: import("@prisma/client-runtime-utils").Decimal;
+        status: import("@prisma/client").$Enums.PayoutStatus;
+        providerRef: string | null;
+        failureReason: string | null;
+        destinationSnapshot: import("@prisma/client/runtime/client").JsonValue | null;
+        paidAt: Date | null;
+    }>;
+    exportPayoutsCsv(status?: PayoutStatusFilter): Promise<string>;
     getStats(): Promise<{
         users: number;
         tasks: number;
@@ -169,3 +229,4 @@ export declare class AdminService {
         escrowHeldLkr: number | import("@prisma/client-runtime-utils").Decimal;
     }>;
 }
+export {};

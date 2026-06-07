@@ -1,8 +1,10 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
 export declare class MessagesService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private events;
+    constructor(prisma: PrismaService, events: EventEmitter2);
     getMessages(taskId: string, userId: string): Promise<({
         sender: {
             id: string;
@@ -12,9 +14,9 @@ export declare class MessagesService {
     } & {
         id: string;
         createdAt: Date;
-        taskId: string;
-        content: string;
         type: import("@prisma/client").$Enums.MessageType;
+        content: string;
+        taskId: string;
         readAt: Date | null;
         senderId: string;
     })[]>;
@@ -27,9 +29,9 @@ export declare class MessagesService {
     } & {
         id: string;
         createdAt: Date;
-        taskId: string;
-        content: string;
         type: import("@prisma/client").$Enums.MessageType;
+        content: string;
+        taskId: string;
         readAt: Date | null;
         senderId: string;
     }>;

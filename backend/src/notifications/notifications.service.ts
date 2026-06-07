@@ -1,10 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationType } from '@prisma/client';
+import { PUSH_PROVIDER, type PushProvider } from './providers/push.provider.js';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger('NotificationsService');
+
+  constructor(
+    private prisma: PrismaService,
+    @Inject(PUSH_PROVIDER) private push: PushProvider,
+  ) {}
 
   async getForUser(userId: string) {
     return this.prisma.notification.findMany({
@@ -43,20 +49,39 @@ export class NotificationsService {
     taskId?: string,
     data?: object,
   ) {
-    const notification = await this.prisma.notification.create({
-      data: { userId, type, title, body, taskId, data },
-    });
+    try {
+      const notification = await this.prisma.notification.create({
+        data: { userId, type, title, body, taskId, data: data as object },
+      });
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { fcmToken: true },
-    });
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { fcmToken: true },
+      });
 
-    if (user?.fcmToken) {
-      // TODO: Replace with actual FCM HTTP v1 API call
-      console.log(`[FCM] → ${user.fcmToken}: ${title} — ${body}`);
+      if (user?.fcmToken) {
+        await this.push.sendToToken(user.fcmToken, {
+          title,
+          body,
+          data: { type, ...(taskId ? { taskId } : {}) },
+        });
+      }
+
+      return notification;
+    } catch (err) {
+      this.logger.error(`Failed to send notification to ${userId}: ${(err as Error).message}`);
+      return null;
     }
+  }
 
-    return notification;
+  async sendToMany(
+    userIds: string[],
+    type: NotificationType,
+    title: string,
+    body: string,
+    taskId?: string,
+    data?: object,
+  ) {
+    await Promise.all(userIds.map((id) => this.send(id, type, title, body, taskId, data)));
   }
 }

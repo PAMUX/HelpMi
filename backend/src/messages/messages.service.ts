@@ -1,10 +1,15 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SendMessageDto } from './dto/send-message.dto.js';
+import { NotificationEvent } from '../notifications/events/notification-events.js';
 
 @Injectable()
 export class MessagesService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private events: EventEmitter2,
+  ) {}
 
   async getMessages(taskId: string, userId: string) {
     const task = await this.prisma.task.findUnique({ where: { id: taskId } });
@@ -35,7 +40,7 @@ export class MessagesService {
       throw new ForbiddenException('Cannot send messages on a closed task');
     }
 
-    return this.prisma.message.create({
+    const message = await this.prisma.message.create({
       data: {
         taskId,
         senderId,
@@ -44,6 +49,18 @@ export class MessagesService {
       },
       include: { sender: { select: { id: true, name: true, avatarUrl: true } } },
     });
+
+    const recipientId = task.posterId === senderId ? task.doerId : task.posterId;
+    if (recipientId) {
+      this.events.emit(NotificationEvent.MESSAGE_SENT, {
+        taskId,
+        senderId,
+        recipientId,
+        preview: dto.content.slice(0, 80),
+      });
+    }
+
+    return message;
   }
 
   async getUnreadCount(userId: string) {

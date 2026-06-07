@@ -1,1 +1,1 @@
-{"version":3,"file":"complete-task.dto.js","sourceRoot":"","sources":["../../../../src/tasks/dto/complete-task.dto.ts"],"names":[],"mappings":";;;;;;;;;;;;AAAA,qDAAwC;AAExC,MAAa,eAAe;IAE1B,kBAAkB,CAAS;CAC5B;AAHD,0CAGC;AADC;IADC,IAAA,uBAAK,GAAE;;2DACmB"}
+{"version":3,"file":"complete-task.dto.js","sourceRoot":"","sources":["../../../../src/tasks/dto/complete-task.dto.ts"],"names":[],"mappings":";;;;;;;;;;;;;AAAA,qDAAwC;AAExC,MAAa,eAAe;IAE1B,kBAAkB,CAAS;;;;CAC5B;AAHD,0CAGC;AADC;IADC,IAAA,uBAAK,GAAE;;2DACmB"}

@@ -13,7 +13,9 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RatingsController = void 0;
+const openapi = require("@nestjs/swagger");
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const ratings_service_js_1 = require("./ratings.service.js");
 const create_rating_dto_js_1 = require("./dto/create-rating.dto.js");
 const current_user_decorator_js_1 = require("../common/decorators/current-user.decorator.js");
@@ -31,7 +33,9 @@ let RatingsController = class RatingsController {
 };
 exports.RatingsController = RatingsController;
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'Rate a completed task' }),
     (0, common_1.Post)(),
+    openapi.ApiResponse({ status: 201 }),
     __param(0, (0, current_user_decorator_js_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -39,13 +43,17 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], RatingsController.prototype, "create", null);
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'Ratings + summary for a user' }),
     (0, common_1.Get)('user/:userId'),
+    openapi.ApiResponse({ status: 200 }),
     __param(0, (0, common_1.Param)('userId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], RatingsController.prototype, "getForUser", null);
 exports.RatingsController = RatingsController = __decorate([
+    (0, swagger_1.ApiTags)('ratings'),
+    (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, common_1.Controller)('ratings'),
     __metadata("design:paramtypes", [ratings_service_js_1.RatingsService])
 ], RatingsController);

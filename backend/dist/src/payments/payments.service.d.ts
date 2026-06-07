@@ -1,23 +1,25 @@
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 export declare class PaymentsService {
     private prisma;
     private config;
-    constructor(prisma: PrismaService, config: ConfigService);
+    private events;
+    constructor(prisma: PrismaService, config: ConfigService, events: EventEmitter2);
     getEscrow(taskId: string, userId: string): Promise<{
         task: {
-            posterId: string;
-            status: import("@prisma/client").$Enums.TaskStatus;
             doerId: string | null;
+            status: import("@prisma/client").$Enums.TaskStatus;
+            posterId: string;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
         taskId: string;
-        posterId: string;
-        status: import("@prisma/client").$Enums.EscrowStatus;
         doerId: string | null;
+        status: import("@prisma/client").$Enums.EscrowStatus;
+        posterId: string;
         taskBudget: import("@prisma/client-runtime-utils").Decimal;
         platformFeeFromPoster: import("@prisma/client-runtime-utils").Decimal;
         platformFeeFromDoer: import("@prisma/client-runtime-utils").Decimal;
@@ -47,4 +49,7 @@ export declare class PaymentsService {
     handleWebhook(body: Record<string, string>): Promise<{
         received: boolean;
     }>;
+    private applyEscrowPayment;
+    private applyPostingFeePayment;
+    private announceTask;
 }

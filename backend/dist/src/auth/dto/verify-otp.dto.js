@@ -10,18 +10,25 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VerifyOtpDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
+const swagger_1 = require("@nestjs/swagger");
 class VerifyOtpDto {
     phone;
     code;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { phone: { required: true, type: () => String, pattern: "^\\+94[0-9]{9}$" }, code: { required: true, type: () => String, minLength: 6, maxLength: 6 } };
+    }
 }
 exports.VerifyOtpDto = VerifyOtpDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '+94771234567' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.Matches)(/^\+94[0-9]{9}$/, { message: 'Phone must be a valid Sri Lanka number: +94XXXXXXXXX' }),
     __metadata("design:type", String)
 ], VerifyOtpDto.prototype, "phone", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '123456', description: '6-digit code' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.Length)(6, 6, { message: 'OTP must be exactly 6 digits' }),
     __metadata("design:type", String)

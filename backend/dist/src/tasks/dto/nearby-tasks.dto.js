@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.NearbyTasksDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class NearbyTasksDto {
@@ -17,6 +18,9 @@ class NearbyTasksDto {
     lng;
     radiusKm;
     limit;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { lat: { required: true, type: () => Number }, lng: { required: true, type: () => Number }, radiusKm: { required: false, type: () => Number, minimum: 1, maximum: 50 }, limit: { required: false, type: () => Number, minimum: 1, maximum: 100 } };
+    }
 }
 exports.NearbyTasksDto = NearbyTasksDto;
 __decorate([

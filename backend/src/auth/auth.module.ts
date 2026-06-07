@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
+import { smsProviderFactory } from './providers/sms.provider.js';
 
 @Module({
   imports: [
@@ -18,7 +19,7 @@ import { JwtStrategy } from './strategies/jwt.strategy.js';
       }),
     }),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, smsProviderFactory],
   controllers: [AuthController],
   exports: [JwtModule],
 })

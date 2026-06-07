@@ -1,8 +1,10 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateRatingDto } from './dto/create-rating.dto.js';
 export declare class RatingsService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private events;
+    constructor(prisma: PrismaService, events: EventEmitter2);
     create(raterId: string, dto: CreateRatingDto): Promise<{
         id: string;
         createdAt: Date;

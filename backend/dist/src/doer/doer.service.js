@@ -31,17 +31,36 @@ let DoerService = class DoerService {
         if (existing && existing.kycStatus === 'APPROVED') {
             throw new common_1.ConflictException('KYC already approved');
         }
+        const kycData = {
+            nicPhotoUrl: dto.nicPhotoUrl,
+            selfieUrl: dto.selfieUrl,
+            addressProofUrl: dto.addressProofUrl,
+            policeClearanceUrl: dto.policeClearanceUrl,
+            drivingLicenseUrl: dto.drivingLicenseUrl,
+            skillProofUrl: dto.skillProofUrl,
+            ref1Name: dto.ref1Name,
+            ref1Phone: dto.ref1Phone,
+            ref2Name: dto.ref2Name,
+            ref2Phone: dto.ref2Phone,
+            preferredPayoutMethod: dto.preferredPayoutMethod,
+            bankAccountName: dto.bankAccountName,
+            bankAccountNumber: dto.bankAccountNumber,
+            bankName: dto.bankName,
+            bankBranch: dto.bankBranch,
+            mobileWalletProvider: dto.mobileWalletProvider,
+            mobileWalletNumber: dto.mobileWalletNumber,
+        };
         const profile = await this.prisma.doerProfile.upsert({
             where: { userId },
             update: {
-                ...dto,
+                ...kycData,
                 kycStatus: 'PENDING',
                 kycReviewedAt: null,
                 kycReviewNote: null,
             },
             create: {
                 userId,
-                ...dto,
+                ...kycData,
                 kycStatus: 'PENDING',
             },
         });
@@ -51,10 +70,34 @@ let DoerService = class DoerService {
         });
         return profile;
     }
+    async setPayoutMethod(userId, dto) {
+        const profile = await this.prisma.doerProfile.findUnique({ where: { userId } });
+        if (!profile) {
+            throw new common_1.NotFoundException('Doer profile not found. Submit KYC first.');
+        }
+        return this.prisma.doerProfile.update({
+            where: { userId },
+            data: {
+                preferredPayoutMethod: dto.preferredPayoutMethod,
+                bankAccountName: dto.bankAccountName,
+                bankAccountNumber: dto.bankAccountNumber,
+                bankName: dto.bankName,
+                bankBranch: dto.bankBranch,
+                mobileWalletProvider: dto.mobileWalletProvider,
+                mobileWalletNumber: dto.mobileWalletNumber,
+            },
+        });
+    }
+    getPayouts(userId) {
+        return this.prisma.payout.findMany({
+            where: { doerId: userId },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
     async getMyTasks(userId) {
         return this.prisma.task.findMany({
             where: { doerId: userId },
-            include: { category: true, poster: { select: { id: true, name: true, phone: true } } },
+            include: { category: true, poster: { select: { id: true, name: true, avatarUrl: true } } },
             orderBy: { updatedAt: 'desc' },
         });
     }

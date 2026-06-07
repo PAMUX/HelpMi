@@ -16,9 +16,9 @@ export declare class MessagesController {
     } & {
         id: string;
         createdAt: Date;
-        taskId: string;
-        content: string;
         type: import("@prisma/client").$Enums.MessageType;
+        content: string;
+        taskId: string;
         readAt: Date | null;
         senderId: string;
     })[]>;
@@ -31,9 +31,9 @@ export declare class MessagesController {
     } & {
         id: string;
         createdAt: Date;
-        taskId: string;
-        content: string;
         type: import("@prisma/client").$Enums.MessageType;
+        content: string;
+        taskId: string;
         readAt: Date | null;
         senderId: string;
     }>;

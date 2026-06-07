@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubmitKycDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class SubmitKycDto {
     nicPhotoUrl;
@@ -23,6 +24,15 @@ class SubmitKycDto {
     ref2Name;
     ref2Phone;
     preferredPayoutMethod;
+    bankAccountName;
+    bankAccountNumber;
+    bankName;
+    bankBranch;
+    mobileWalletProvider;
+    mobileWalletNumber;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { nicPhotoUrl: { required: true, type: () => String, format: "uri" }, selfieUrl: { required: true, type: () => String, format: "uri" }, addressProofUrl: { required: true, type: () => String, format: "uri" }, policeClearanceUrl: { required: false, type: () => String, format: "uri" }, drivingLicenseUrl: { required: false, type: () => String, format: "uri" }, skillProofUrl: { required: false, type: () => String, format: "uri" }, ref1Name: { required: false, type: () => String }, ref1Phone: { required: false, type: () => String }, ref2Name: { required: false, type: () => String }, ref2Phone: { required: false, type: () => String }, preferredPayoutMethod: { required: false, enum: ["BANK", "MOBILE_WALLET"], enum: ['BANK', 'MOBILE_WALLET'] }, bankAccountName: { required: false, type: () => String }, bankAccountNumber: { required: false, type: () => String }, bankName: { required: false, type: () => String }, bankBranch: { required: false, type: () => String }, mobileWalletProvider: { required: false, type: () => String }, mobileWalletNumber: { required: false, type: () => String } };
+    }
 }
 exports.SubmitKycDto = SubmitKycDto;
 __decorate([
@@ -77,4 +87,34 @@ __decorate([
     (0, class_validator_1.IsIn)(['BANK', 'MOBILE_WALLET']),
     __metadata("design:type", String)
 ], SubmitKycDto.prototype, "preferredPayoutMethod", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SubmitKycDto.prototype, "bankAccountName", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SubmitKycDto.prototype, "bankAccountNumber", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SubmitKycDto.prototype, "bankName", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SubmitKycDto.prototype, "bankBranch", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SubmitKycDto.prototype, "mobileWalletProvider", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], SubmitKycDto.prototype, "mobileWalletNumber", void 0);
 //# sourceMappingURL=submit-kyc.dto.js.map

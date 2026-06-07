@@ -10,10 +10,14 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SendMessageDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class SendMessageDto {
     content;
     type;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { content: { required: true, type: () => String, minLength: 1 }, type: { required: false, enum: ["TEXT", "IMAGE"], enum: ['TEXT', 'IMAGE'] } };
+    }
 }
 exports.SendMessageDto = SendMessageDto;
 __decorate([

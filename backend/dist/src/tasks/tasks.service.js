@@ -11,18 +11,27 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TasksService = void 0;
 const common_1 = require("@nestjs/common");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_js_1 = require("../prisma/prisma.service.js");
+const notification_events_js_1 = require("../notifications/events/notification-events.js");
+const payout_service_js_1 = require("../payments/payout.service.js");
 const TIER_RANK = { BRONZE: 0, SILVER: 1, GOLD: 2 };
 let TasksService = class TasksService {
     prisma;
-    constructor(prisma) {
+    events;
+    payouts;
+    constructor(prisma, events, payouts) {
         this.prisma = prisma;
+        this.events = events;
+        this.payouts = payouts;
     }
     async create(posterId, dto) {
         const category = await this.prisma.category.findUnique({ where: { id: dto.categoryId } });
         if (!category || !category.isActive) {
             throw new common_1.NotFoundException('Category not found');
         }
+        const paymentMode = dto.paymentMode ?? 'ESCROW';
+        const initialStatus = 'PENDING_PAYMENT';
         const task = await this.prisma.task.create({
             data: {
                 posterId,
@@ -34,7 +43,8 @@ let TasksService = class TasksService {
                 locationLng: dto.locationLng,
                 locationAddress: dto.locationAddress,
                 budget: dto.budget,
-                paymentMode: dto.paymentMode ?? 'ESCROW',
+                paymentMode,
+                status: initialStatus,
                 requiredTier: dto.requiredTier ?? category.minTier,
                 scheduledStart: dto.scheduledStart ? new Date(dto.scheduledStart) : undefined,
                 scheduledEnd: dto.scheduledEnd ? new Date(dto.scheduledEnd) : undefined,
@@ -54,6 +64,11 @@ let TasksService = class TasksService {
                     netDoerPayout: +(budget * 0.85).toFixed(2),
                     status: 'PENDING',
                 },
+            });
+        }
+        else {
+            await this.prisma.postingFee.create({
+                data: { taskId: task.id, posterId, status: 'PENDING' },
             });
         }
         return task;
@@ -91,7 +106,7 @@ let TasksService = class TasksService {
         })
             .slice(0, limit);
     }
-    async findById(id) {
+    async findById(id, requesterId) {
         const task = await this.prisma.task.findUnique({
             where: { id },
             include: {
@@ -104,7 +119,15 @@ let TasksService = class TasksService {
         });
         if (!task)
             throw new common_1.NotFoundException('Task not found');
-        return task;
+        const isParticipant = !!requesterId && (task.posterId === requesterId || task.doerId === requesterId);
+        if (isParticipant)
+            return task;
+        const { escrow, dispute, doer, doerId, ...pub } = task;
+        void escrow;
+        void dispute;
+        void doer;
+        void doerId;
+        return pub;
     }
     async getAcceptedTasks(userId) {
         return this.prisma.task.findMany({
@@ -143,11 +166,24 @@ let TasksService = class TasksService {
         if (TIER_RANK[doerProfile.tier] < TIER_RANK[task.requiredTier]) {
             throw new common_1.ForbiddenException(`This task requires ${task.requiredTier} tier. Your tier is ${doerProfile.tier}.`);
         }
-        return this.prisma.task.update({
+        if (task.paymentMode === 'ESCROW') {
+            const escrow = await this.prisma.escrow.findUnique({ where: { taskId } });
+            if (!escrow || escrow.status !== 'HELD') {
+                throw new common_1.BadRequestException('Funds are not yet secured for this task');
+            }
+        }
+        const updated = await this.prisma.task.update({
             where: { id: taskId },
             data: { status: 'ASSIGNED', doerId, acceptedAt: new Date() },
-            include: { poster: { select: { id: true, name: true, phone: true } } },
+            include: { poster: { select: { id: true, name: true, avatarUrl: true } } },
         });
+        this.events.emit(notification_events_js_1.NotificationEvent.TASK_ACCEPTED, {
+            taskId,
+            posterId: task.posterId,
+            doerId,
+            title: task.title,
+        });
+        return updated;
     }
     async markStarted(taskId, doerId) {
         const task = await this.ensureTaskDoer(taskId, doerId);
@@ -164,7 +200,7 @@ let TasksService = class TasksService {
         if (!['ASSIGNED', 'IN_PROGRESS'].includes(task.status)) {
             throw new common_1.BadRequestException('Task cannot be marked complete in its current state');
         }
-        return this.prisma.task.update({
+        const updated = await this.prisma.task.update({
             where: { id: taskId },
             data: {
                 status: 'COMPLETED',
@@ -172,29 +208,95 @@ let TasksService = class TasksService {
                 completionPhotoUrl: dto.completionPhotoUrl,
             },
         });
+        this.events.emit(notification_events_js_1.NotificationEvent.TASK_COMPLETED, {
+            taskId,
+            posterId: task.posterId,
+            doerId,
+            title: task.title,
+        });
+        return updated;
     }
     async confirm(taskId, posterId) {
         const task = await this.ensureTaskPoster(taskId, posterId);
         if (task.status !== 'COMPLETED') {
             throw new common_1.BadRequestException('Task must be marked complete by doer first');
         }
+        if (task.paymentMode === 'ESCROW') {
+            const escrow = await this.prisma.escrow.findUnique({ where: { taskId } });
+            if (!escrow || escrow.status !== 'HELD') {
+                throw new common_1.BadRequestException('Escrow funds are not held for this task; payment cannot be released');
+            }
+            await this.releaseEscrow(taskId, task.doerId, { markConfirmed: true });
+            this.events.emit(notification_events_js_1.NotificationEvent.TASK_CONFIRMED, {
+                taskId,
+                posterId: task.posterId,
+                doerId: task.doerId,
+                title: task.title,
+            });
+            return this.prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+        }
         const updated = await this.prisma.task.update({
             where: { id: taskId },
             data: { confirmedAt: new Date() },
         });
-        if (task.paymentMode === 'ESCROW') {
-            await this.prisma.escrow.update({
-                where: { taskId },
-                data: { status: 'RELEASED', releasedAt: new Date(), doerId: task.doerId },
+        this.events.emit(notification_events_js_1.NotificationEvent.TASK_CONFIRMED, {
+            taskId,
+            posterId: task.posterId,
+            doerId: task.doerId,
+            title: task.title,
+        });
+        return updated;
+    }
+    async releaseEscrow(taskId, doerId, opts = {}) {
+        const released = await this.prisma.$transaction(async (tx) => {
+            const result = await tx.escrow.updateMany({
+                where: { taskId, status: 'HELD' },
+                data: {
+                    status: 'RELEASED',
+                    releasedAt: new Date(),
+                    ...(doerId ? { doerId } : {}),
+                },
             });
-            if (task.doerId) {
-                await this.prisma.doerProfile.update({
-                    where: { userId: task.doerId },
+            const didRelease = result.count === 1;
+            if (didRelease && doerId) {
+                await tx.doerProfile.updateMany({
+                    where: { userId: doerId },
                     data: { totalJobsCompleted: { increment: 1 } },
                 });
             }
+            if (opts.markConfirmed) {
+                await tx.task.update({
+                    where: { id: taskId },
+                    data: { confirmedAt: new Date() },
+                });
+            }
+            return didRelease;
+        });
+        if (released) {
+            const escrow = await this.prisma.escrow.findUnique({
+                where: { taskId },
+                select: { id: true, netDoerPayout: true },
+            });
+            if (escrow && doerId) {
+                try {
+                    await this.payouts.createForEscrowRelease({
+                        escrowId: escrow.id,
+                        taskId,
+                        doerId,
+                        amount: Number(escrow.netDoerPayout ?? 0),
+                    });
+                }
+                catch {
+                }
+            }
+            this.events.emit(notification_events_js_1.NotificationEvent.PAYMENT_RELEASED, {
+                taskId,
+                doerId,
+                amount: Number(escrow?.netDoerPayout ?? 0),
+                auto: !!opts.auto,
+            });
         }
-        return updated;
+        return released;
     }
     async cancel(taskId, userId) {
         const task = await this.prisma.task.findUnique({ where: { id: taskId } });
@@ -220,6 +322,13 @@ let TasksService = class TasksService {
                 });
             }
         }
+        this.events.emit(notification_events_js_1.NotificationEvent.TASK_CANCELLED, {
+            taskId,
+            posterId: task.posterId,
+            doerId: task.doerId,
+            byUserId: userId,
+            title: task.title,
+        });
         return updated;
     }
     async raiseDispute(taskId, userId, reason) {
@@ -239,6 +348,13 @@ let TasksService = class TasksService {
                 ? [this.prisma.escrow.update({ where: { taskId }, data: { status: 'DISPUTED' } })]
                 : []),
         ]);
+        this.events.emit(notification_events_js_1.NotificationEvent.TASK_DISPUTED, {
+            taskId,
+            posterId: task.posterId,
+            doerId: task.doerId,
+            byUserId: userId,
+            title: task.title,
+        });
         return updatedTask;
     }
     async ensureTaskDoer(taskId, doerId) {
@@ -278,6 +394,8 @@ let TasksService = class TasksService {
 exports.TasksService = TasksService;
 exports.TasksService = TasksService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService,
+        event_emitter_1.EventEmitter2,
+        payout_service_js_1.PayoutService])
 ], TasksService);
 //# sourceMappingURL=tasks.service.js.map

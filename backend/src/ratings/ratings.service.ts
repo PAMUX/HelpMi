@@ -1,10 +1,15 @@
 import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateRatingDto } from './dto/create-rating.dto.js';
+import { NotificationEvent } from '../notifications/events/notification-events.js';
 
 @Injectable()
 export class RatingsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private events: EventEmitter2,
+  ) {}
 
   async create(raterId: string, dto: CreateRatingDto) {
     const task = await this.prisma.task.findUnique({ where: { id: dto.taskId } });
@@ -39,6 +44,13 @@ export class RatingsService {
     });
 
     await this.updateDoerStats(rateeId);
+
+    this.events.emit(NotificationEvent.RATING_RECEIVED, {
+      rateeId,
+      raterId,
+      taskId: dto.taskId,
+      score: dto.score,
+    });
 
     return rating;
   }

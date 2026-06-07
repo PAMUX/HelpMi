@@ -5,18 +5,18 @@ export declare class PaymentsController {
     constructor(payments: PaymentsService);
     getEscrow(taskId: string, user: JwtPayload): Promise<{
         task: {
-            posterId: string;
-            status: import("@prisma/client").$Enums.TaskStatus;
             doerId: string | null;
+            status: import("@prisma/client").$Enums.TaskStatus;
+            posterId: string;
         };
     } & {
         id: string;
         createdAt: Date;
         updatedAt: Date;
         taskId: string;
-        posterId: string;
-        status: import("@prisma/client").$Enums.EscrowStatus;
         doerId: string | null;
+        status: import("@prisma/client").$Enums.EscrowStatus;
+        posterId: string;
         taskBudget: import("@prisma/client-runtime-utils").Decimal;
         platformFeeFromPoster: import("@prisma/client-runtime-utils").Decimal;
         platformFeeFromDoer: import("@prisma/client-runtime-utils").Decimal;

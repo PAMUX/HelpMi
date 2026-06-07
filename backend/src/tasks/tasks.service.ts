@@ -4,23 +4,35 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DoerTier } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { NearbyTasksDto } from './dto/nearby-tasks.dto.js';
 import { CompleteTaskDto } from './dto/complete-task.dto.js';
+import { NotificationEvent } from '../notifications/events/notification-events.js';
+import { PayoutService } from '../payments/payout.service.js';
 
 const TIER_RANK: Record<DoerTier, number> = { BRONZE: 0, SILVER: 1, GOLD: 2 };
 
 @Injectable()
 export class TasksService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private events: EventEmitter2,
+    private payouts: PayoutService,
+  ) {}
 
   async create(posterId: string, dto: CreateTaskDto) {
     const category = await this.prisma.category.findUnique({ where: { id: dto.categoryId } });
     if (!category || !category.isActive) {
       throw new NotFoundException('Category not found');
     }
+
+    const paymentMode = dto.paymentMode ?? 'ESCROW';
+    // P3-B: CASH tasks now also start PENDING_PAYMENT until the Rs. 99 posting
+    // fee is paid; they are announced from the payment webhook (like escrow).
+    const initialStatus = 'PENDING_PAYMENT';
 
     const task = await this.prisma.task.create({
       data: {
@@ -33,7 +45,8 @@ export class TasksService {
         locationLng: dto.locationLng,
         locationAddress: dto.locationAddress,
         budget: dto.budget,
-        paymentMode: dto.paymentMode ?? 'ESCROW',
+        paymentMode,
+        status: initialStatus,
         requiredTier: dto.requiredTier ?? category.minTier,
         scheduledStart: dto.scheduledStart ? new Date(dto.scheduledStart) : undefined,
         scheduledEnd: dto.scheduledEnd ? new Date(dto.scheduledEnd) : undefined,
@@ -54,6 +67,11 @@ export class TasksService {
           netDoerPayout: +(budget * 0.85).toFixed(2),
           status: 'PENDING',
         },
+      });
+    } else {
+      // P3-B: create the Rs. 99 posting-fee record; task opens once it is paid.
+      await this.prisma.postingFee.create({
+        data: { taskId: task.id, posterId, status: 'PENDING' },
       });
     }
 
@@ -96,7 +114,12 @@ export class TasksService {
       .slice(0, limit);
   }
 
-  async findById(id: string) {
+  /**
+   * P3-C: participant-aware task detail. Poster/doer get the full record
+   * (incl. escrow, dispute, counterpart phone); everyone else gets a public
+   * subset with no financial or contact details.
+   */
+  async findById(id: string, requesterId?: string) {
     const task = await this.prisma.task.findUnique({
       where: { id },
       include: {
@@ -108,7 +131,18 @@ export class TasksService {
       },
     });
     if (!task) throw new NotFoundException('Task not found');
-    return task;
+
+    const isParticipant =
+      !!requesterId && (task.posterId === requesterId || task.doerId === requesterId);
+    if (isParticipant) return task;
+
+    // Public view: strip escrow, dispute and doer identity.
+    const { escrow, dispute, doer, doerId, ...pub } = task;
+    void escrow;
+    void dispute;
+    void doer;
+    void doerId;
+    return pub;
   }
 
   async getAcceptedTasks(userId: string) {
@@ -151,11 +185,28 @@ export class TasksService {
       );
     }
 
-    return this.prisma.task.update({
+    if (task.paymentMode === 'ESCROW') {
+      const escrow = await this.prisma.escrow.findUnique({ where: { taskId } });
+      if (!escrow || escrow.status !== 'HELD') {
+        throw new BadRequestException('Funds are not yet secured for this task');
+      }
+    }
+
+    // P3-C: do not leak the poster's phone number to the doer.
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: { status: 'ASSIGNED', doerId, acceptedAt: new Date() },
-      include: { poster: { select: { id: true, name: true, phone: true } } },
+      include: { poster: { select: { id: true, name: true, avatarUrl: true } } },
     });
+
+    this.events.emit(NotificationEvent.TASK_ACCEPTED, {
+      taskId,
+      posterId: task.posterId,
+      doerId,
+      title: task.title,
+    });
+
+    return updated;
   }
 
   async markStarted(taskId: string, doerId: string) {
@@ -174,7 +225,7 @@ export class TasksService {
     if (!['ASSIGNED', 'IN_PROGRESS'].includes(task.status)) {
       throw new BadRequestException('Task cannot be marked complete in its current state');
     }
-    return this.prisma.task.update({
+    const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: {
         status: 'COMPLETED',
@@ -182,6 +233,15 @@ export class TasksService {
         completionPhotoUrl: dto.completionPhotoUrl,
       },
     });
+
+    this.events.emit(NotificationEvent.TASK_COMPLETED, {
+      taskId,
+      posterId: task.posterId,
+      doerId,
+      title: task.title,
+    });
+
+    return updated;
   }
 
   async confirm(taskId: string, posterId: string) {
@@ -190,26 +250,100 @@ export class TasksService {
       throw new BadRequestException('Task must be marked complete by doer first');
     }
 
+    if (task.paymentMode === 'ESCROW') {
+      const escrow = await this.prisma.escrow.findUnique({ where: { taskId } });
+      if (!escrow || escrow.status !== 'HELD') {
+        throw new BadRequestException(
+          'Escrow funds are not held for this task; payment cannot be released',
+        );
+      }
+      await this.releaseEscrow(taskId, task.doerId, { markConfirmed: true });
+      this.events.emit(NotificationEvent.TASK_CONFIRMED, {
+        taskId,
+        posterId: task.posterId,
+        doerId: task.doerId,
+        title: task.title,
+      });
+      return this.prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    }
+
     const updated = await this.prisma.task.update({
       where: { id: taskId },
       data: { confirmedAt: new Date() },
     });
+    this.events.emit(NotificationEvent.TASK_CONFIRMED, {
+      taskId,
+      posterId: task.posterId,
+      doerId: task.doerId,
+      title: task.title,
+    });
+    return updated;
+  }
 
-    if (task.paymentMode === 'ESCROW') {
-      await this.prisma.escrow.update({
-        where: { taskId },
-        data: { status: 'RELEASED', releasedAt: new Date(), doerId: task.doerId },
+  async releaseEscrow(
+    taskId: string,
+    doerId: string | null,
+    opts: { markConfirmed?: boolean; auto?: boolean } = {},
+  ): Promise<boolean> {
+    const released = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.escrow.updateMany({
+        where: { taskId, status: 'HELD' },
+        data: {
+          status: 'RELEASED',
+          releasedAt: new Date(),
+          ...(doerId ? { doerId } : {}),
+        },
       });
 
-      if (task.doerId) {
-        await this.prisma.doerProfile.update({
-          where: { userId: task.doerId },
+      const didRelease = result.count === 1;
+
+      if (didRelease && doerId) {
+        await tx.doerProfile.updateMany({
+          where: { userId: doerId },
           data: { totalJobsCompleted: { increment: 1 } },
         });
       }
+
+      if (opts.markConfirmed) {
+        await tx.task.update({
+          where: { id: taskId },
+          data: { confirmedAt: new Date() },
+        });
+      }
+
+      return didRelease;
+    });
+
+    if (released) {
+      const escrow = await this.prisma.escrow.findUnique({
+        where: { taskId },
+        select: { id: true, netDoerPayout: true },
+      });
+
+      // P3-A: exactly one payout per release (escrowId-unique guarantees it).
+      if (escrow && doerId) {
+        try {
+          await this.payouts.createForEscrowRelease({
+            escrowId: escrow.id,
+            taskId,
+            doerId,
+            amount: Number(escrow.netDoerPayout ?? 0),
+          });
+        } catch {
+          // Payout creation failure must not undo a completed release; the
+          // ledger reconciliation/admin can recover it.
+        }
+      }
+
+      this.events.emit(NotificationEvent.PAYMENT_RELEASED, {
+        taskId,
+        doerId,
+        amount: Number(escrow?.netDoerPayout ?? 0),
+        auto: !!opts.auto,
+      });
     }
 
-    return updated;
+    return released;
   }
 
   async cancel(taskId: string, userId: string) {
@@ -239,6 +373,14 @@ export class TasksService {
       }
     }
 
+    this.events.emit(NotificationEvent.TASK_CANCELLED, {
+      taskId,
+      posterId: task.posterId,
+      doerId: task.doerId,
+      byUserId: userId,
+      title: task.title,
+    });
+
     return updated;
   }
 
@@ -259,6 +401,14 @@ export class TasksService {
         ? [this.prisma.escrow.update({ where: { taskId }, data: { status: 'DISPUTED' } })]
         : []),
     ]);
+
+    this.events.emit(NotificationEvent.TASK_DISPUTED, {
+      taskId,
+      posterId: task.posterId,
+      doerId: task.doerId,
+      byUserId: userId,
+      title: task.title,
+    });
 
     return updatedTask;
   }

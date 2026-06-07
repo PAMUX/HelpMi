@@ -1,9 +1,18 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { NotificationEvent } from '../notifications/events/notification-events.js';
+import { PayoutService } from '../payments/payout.service.js';
+
+type PayoutStatusFilter = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private events: EventEmitter2,
+    private payouts: PayoutService,
+  ) {}
 
   // KYC
   getPendingKyc() {
@@ -27,6 +36,12 @@ export class AdminService {
       data: { doerProfileId: profileId, reviewerPhone: adminPhone, action: 'APPROVED' },
     });
 
+    this.events.emit(NotificationEvent.KYC_REVIEWED, {
+      userId: profile.userId,
+      approved: true,
+      tier,
+    });
+
     return updated;
   }
 
@@ -41,6 +56,12 @@ export class AdminService {
 
     await this.prisma.kycReview.create({
       data: { doerProfileId: profileId, reviewerPhone: adminPhone, action: 'REJECTED', note },
+    });
+
+    this.events.emit(NotificationEvent.KYC_REVIEWED, {
+      userId: profile.userId,
+      approved: false,
+      note,
     });
 
     return updated;
@@ -128,6 +149,19 @@ export class AdminService {
     });
 
     return { resolved: true };
+  }
+
+  // P3-A: Payouts
+  listPayouts(status?: PayoutStatusFilter) {
+    return this.payouts.adminList(status);
+  }
+
+  markPayoutPaid(payoutId: string, providerRef?: string) {
+    return this.payouts.markPaid(payoutId, providerRef);
+  }
+
+  exportPayoutsCsv(status?: PayoutStatusFilter) {
+    return this.payouts.exportCsv(status);
   }
 
   // Stats

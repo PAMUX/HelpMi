@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateRatingDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CreateRatingDto {
@@ -17,6 +18,9 @@ class CreateRatingDto {
     score;
     comment;
     isOnTime;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { taskId: { required: true, type: () => String }, score: { required: true, type: () => Number, minimum: 1, maximum: 5 }, comment: { required: false, type: () => String }, isOnTime: { required: false, type: () => Boolean } };
+    }
 }
 exports.CreateRatingDto = CreateRatingDto;
 __decorate([

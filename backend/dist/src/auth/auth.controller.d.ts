@@ -7,6 +7,9 @@ export declare class AuthController {
     requestOtp(dto: RequestOtpDto): Promise<{
         message: string;
     }>;
+    resendOtp(dto: RequestOtpDto): Promise<{
+        message: string;
+    }>;
     verifyOtp(dto: VerifyOtpDto): Promise<{
         accessToken: string;
         user: {
@@ -21,6 +24,7 @@ export declare class AuthController {
             isPoster: boolean;
             isBanned: boolean;
             fcmToken: string | null;
+            deletedAt: Date | null;
             updatedAt: Date;
         };
     }>;

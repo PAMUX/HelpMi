@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateTaskDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 const class_transformer_1 = require("class-transformer");
 class CreateTaskDto {
@@ -25,6 +26,9 @@ class CreateTaskDto {
     requiredTier;
     scheduledStart;
     scheduledEnd;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { categoryId: { required: true, type: () => String }, title: { required: true, type: () => String, minLength: 5, maxLength: 100 }, description: { required: true, type: () => String, minLength: 20, maxLength: 2000 }, photoUrls: { required: false, type: () => [String], format: "uri" }, locationLat: { required: true, type: () => Number }, locationLng: { required: true, type: () => Number }, locationAddress: { required: true, type: () => String }, budget: { required: true, type: () => Number, minimum: 500 }, paymentMode: { required: false, enum: ["ESCROW", "CASH"], enum: ['ESCROW', 'CASH'] }, requiredTier: { required: false, enum: ["SILVER", "BRONZE", "GOLD"], enum: ['BRONZE', 'SILVER', 'GOLD'] }, scheduledStart: { required: false, type: () => String }, scheduledEnd: { required: false, type: () => String } };
+    }
 }
 exports.CreateTaskDto = CreateTaskDto;
 __decorate([

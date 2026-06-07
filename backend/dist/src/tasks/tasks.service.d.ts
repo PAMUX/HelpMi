@@ -1,10 +1,14 @@
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { NearbyTasksDto } from './dto/nearby-tasks.dto.js';
 import { CompleteTaskDto } from './dto/complete-task.dto.js';
+import { PayoutService } from '../payments/payout.service.js';
 export declare class TasksService {
     private prisma;
-    constructor(prisma: PrismaService);
+    private events;
+    private payouts;
+    constructor(prisma: PrismaService, events: EventEmitter2, payouts: PayoutService);
     create(posterId: string, dto: CreateTaskDto): Promise<{
         category: {
             minTier: import("@prisma/client").$Enums.DoerTier;
@@ -21,11 +25,13 @@ export declare class TasksService {
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -33,10 +39,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -68,11 +72,13 @@ export declare class TasksService {
         };
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -80,10 +86,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -91,7 +95,7 @@ export declare class TasksService {
         confirmedAt: Date | null;
         isFeatured: boolean;
     }[]>;
-    findById(id: string): Promise<{
+    findById(id: string, requesterId?: string): Promise<{
         category: {
             minTier: import("@prisma/client").$Enums.DoerTier;
             id: string;
@@ -104,55 +108,19 @@ export declare class TasksService {
             sortOrder: number;
             createdAt: Date;
         };
-        escrow: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            taskId: string;
-            posterId: string;
-            status: import("@prisma/client").$Enums.EscrowStatus;
-            doerId: string | null;
-            taskBudget: import("@prisma/client-runtime-utils").Decimal;
-            platformFeeFromPoster: import("@prisma/client-runtime-utils").Decimal;
-            platformFeeFromDoer: import("@prisma/client-runtime-utils").Decimal;
-            trustFundReserve: import("@prisma/client-runtime-utils").Decimal;
-            netDoerPayout: import("@prisma/client-runtime-utils").Decimal | null;
-            payherePaymentId: string | null;
-            payhereOrderId: string | null;
-            payoutMethod: import("@prisma/client").$Enums.PayoutMethod;
-            heldAt: Date | null;
-            releasedAt: Date | null;
-            refundedAt: Date | null;
-        } | null;
-        dispute: {
-            id: string;
-            createdAt: Date;
-            taskId: string;
-            status: import("@prisma/client").$Enums.DisputeStatus;
-            raisedById: string;
-            reason: string;
-            resolutionNote: string | null;
-            resolvedByPhone: string | null;
-            resolvedAt: Date | null;
-        } | null;
         poster: {
             id: string;
             name: string | null;
             avatarUrl: string | null;
         };
-        doer: {
-            id: string;
-            name: string | null;
-            avatarUrl: string | null;
-        } | null;
-    } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -160,10 +128,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -196,11 +162,13 @@ export declare class TasksService {
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -208,10 +176,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -244,11 +210,13 @@ export declare class TasksService {
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -256,10 +224,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -271,16 +237,18 @@ export declare class TasksService {
         poster: {
             id: string;
             name: string | null;
-            phone: string;
+            avatarUrl: string | null;
         };
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -288,10 +256,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -302,11 +268,13 @@ export declare class TasksService {
     markStarted(taskId: string, doerId: string): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -314,10 +282,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -328,11 +294,13 @@ export declare class TasksService {
     markComplete(taskId: string, doerId: string, dto: CompleteTaskDto): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -340,10 +308,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -354,11 +320,13 @@ export declare class TasksService {
     confirm(taskId: string, posterId: string): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -366,10 +334,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -377,14 +343,20 @@ export declare class TasksService {
         confirmedAt: Date | null;
         isFeatured: boolean;
     }>;
+    releaseEscrow(taskId: string, doerId: string | null, opts?: {
+        markConfirmed?: boolean;
+        auto?: boolean;
+    }): Promise<boolean>;
     cancel(taskId: string, userId: string): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -392,10 +364,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -406,11 +376,13 @@ export declare class TasksService {
     raiseDispute(taskId: string, userId: string, reason: string): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -418,10 +390,8 @@ export declare class TasksService {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;

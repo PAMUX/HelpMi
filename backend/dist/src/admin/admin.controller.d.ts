@@ -1,5 +1,10 @@
 import { AdminService } from './admin.service.js';
 import { type JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { ApproveKycDto } from './dto/approve-kyc.dto.js';
+import { RejectKycDto } from './dto/reject-kyc.dto.js';
+import { ResolveDisputeDto } from './dto/resolve-dispute.dto.js';
+import { MarkPaidDto } from './dto/mark-paid.dto.js';
+type PayoutStatusFilter = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
 export declare class AdminController {
     private admin;
     constructor(admin: AdminService);
@@ -34,13 +39,20 @@ export declare class AdminController {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
         kycReviewedAt: Date | null;
         kycReviewNote: string | null;
     })[]>;
-    approveKyc(id: string, admin: JwtPayload, tier: 'BRONZE' | 'SILVER' | 'GOLD'): Promise<{
+    approveKyc(id: string, admin: JwtPayload, dto: ApproveKycDto): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -57,13 +69,20 @@ export declare class AdminController {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
         kycReviewedAt: Date | null;
         kycReviewNote: string | null;
     }>;
-    rejectKyc(id: string, admin: JwtPayload, note: string): Promise<{
+    rejectKyc(id: string, admin: JwtPayload, dto: RejectKycDto): Promise<{
         id: string;
         createdAt: Date;
         updatedAt: Date;
@@ -80,6 +99,13 @@ export declare class AdminController {
         ref1Phone: string | null;
         ref2Name: string | null;
         ref2Phone: string | null;
+        preferredPayoutMethod: import("@prisma/client").$Enums.PayoutMethod;
+        bankAccountName: string | null;
+        bankAccountNumber: string | null;
+        bankName: string | null;
+        bankBranch: string | null;
+        mobileWalletProvider: string | null;
+        mobileWalletNumber: string | null;
         totalJobsCompleted: number;
         avgRating: number;
         onTimeRate: number;
@@ -104,6 +130,7 @@ export declare class AdminController {
         isPoster: boolean;
         isBanned: boolean;
         fcmToken: string | null;
+        deletedAt: Date | null;
         updatedAt: Date;
     })[]>;
     banUser(id: string): Promise<{
@@ -118,6 +145,7 @@ export declare class AdminController {
         isPoster: boolean;
         isBanned: boolean;
         fcmToken: string | null;
+        deletedAt: Date | null;
         updatedAt: Date;
     }>;
     unbanUser(id: string): Promise<{
@@ -132,6 +160,7 @@ export declare class AdminController {
         isPoster: boolean;
         isBanned: boolean;
         fcmToken: string | null;
+        deletedAt: Date | null;
         updatedAt: Date;
     }>;
     getDisputes(status?: 'OPEN' | 'RESOLVED' | 'CLOSED'): import("@prisma/client").Prisma.PrismaPromise<({
@@ -166,7 +195,39 @@ export declare class AdminController {
         resolvedByPhone: string | null;
         resolvedAt: Date | null;
     })[]>;
-    resolveDispute(id: string, admin: JwtPayload, resolutionNote: string, refundPoster: boolean): Promise<{
+    resolveDispute(id: string, admin: JwtPayload, dto: ResolveDisputeDto): Promise<{
         resolved: boolean;
     }>;
+    listPayouts(status?: PayoutStatusFilter): import("@prisma/client").Prisma.PrismaPromise<{
+        id: string;
+        createdAt: Date;
+        method: import("@prisma/client").$Enums.PayoutMethod;
+        updatedAt: Date;
+        taskId: string;
+        escrowId: string;
+        doerId: string;
+        amount: import("@prisma/client-runtime-utils").Decimal;
+        status: import("@prisma/client").$Enums.PayoutStatus;
+        providerRef: string | null;
+        failureReason: string | null;
+        destinationSnapshot: import("@prisma/client/runtime/client").JsonValue | null;
+        paidAt: Date | null;
+    }[]>;
+    markPaid(id: string, dto: MarkPaidDto): Promise<{
+        id: string;
+        createdAt: Date;
+        method: import("@prisma/client").$Enums.PayoutMethod;
+        updatedAt: Date;
+        taskId: string;
+        escrowId: string;
+        doerId: string;
+        amount: import("@prisma/client-runtime-utils").Decimal;
+        status: import("@prisma/client").$Enums.PayoutStatus;
+        providerRef: string | null;
+        failureReason: string | null;
+        destinationSnapshot: import("@prisma/client/runtime/client").JsonValue | null;
+        paidAt: Date | null;
+    }>;
+    exportPayouts(status?: PayoutStatusFilter): Promise<string>;
 }
+export {};

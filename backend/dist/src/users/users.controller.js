@@ -13,7 +13,9 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UsersController = void 0;
+const openapi = require("@nestjs/swagger");
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const users_service_js_1 = require("./users.service.js");
 const update_user_dto_js_1 = require("./dto/update-user.dto.js");
 const current_user_decorator_js_1 = require("../common/decorators/current-user.decorator.js");
@@ -29,20 +31,30 @@ let UsersController = class UsersController {
     updateMe(user, dto) {
         return this.users.update(user.id, dto);
     }
+    exportMe(user) {
+        return this.users.exportMe(user.id);
+    }
+    deleteMe(user) {
+        return this.users.deleteMe(user.id);
+    }
     getProfile(id) {
         return this.users.getPublicProfile(id);
     }
 };
 exports.UsersController = UsersController;
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'Get my profile' }),
     (0, common_1.Get)('me'),
+    openapi.ApiResponse({ status: 200, type: Object }),
     __param(0, (0, current_user_decorator_js_1.CurrentUser)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getMe", null);
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'Update my profile' }),
     (0, common_1.Patch)('me'),
+    openapi.ApiResponse({ status: 200, type: Object }),
     __param(0, (0, current_user_decorator_js_1.CurrentUser)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -50,14 +62,36 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "updateMe", null);
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'PDPA: export all my data' }),
+    (0, common_1.Get)('me/export'),
+    openapi.ApiResponse({ status: 200 }),
+    __param(0, (0, current_user_decorator_js_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "exportMe", null);
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'PDPA: delete (anonymize) my account' }),
+    (0, common_1.Delete)('me'),
+    openapi.ApiResponse({ status: 200 }),
+    __param(0, (0, current_user_decorator_js_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "deleteMe", null);
+__decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'Get a public profile' }),
     (0, public_decorator_js_1.Public)(),
     (0, common_1.Get)(':id/profile'),
+    openapi.ApiResponse({ status: 200 }),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "getProfile", null);
 exports.UsersController = UsersController = __decorate([
+    (0, swagger_1.ApiTags)('users'),
+    (0, swagger_1.ApiBearerAuth)('access-token'),
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_js_1.UsersService])
 ], UsersController);

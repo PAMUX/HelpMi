@@ -9,6 +9,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const schedule_1 = require("@nestjs/schedule");
+const event_emitter_1 = require("@nestjs/event-emitter");
+const throttler_1 = require("@nestjs/throttler");
 const core_1 = require("@nestjs/core");
 const prisma_module_js_1 = require("./prisma/prisma.module.js");
 const auth_module_js_1 = require("./auth/auth.module.js");
@@ -21,6 +24,8 @@ const ratings_module_js_1 = require("./ratings/ratings.module.js");
 const messages_module_js_1 = require("./messages/messages.module.js");
 const notifications_module_js_1 = require("./notifications/notifications.module.js");
 const admin_module_js_1 = require("./admin/admin.module.js");
+const scheduler_module_js_1 = require("./scheduler/scheduler.module.js");
+const uploads_module_js_1 = require("./uploads/uploads.module.js");
 const jwt_auth_guard_js_1 = require("./common/guards/jwt-auth.guard.js");
 let AppModule = class AppModule {
 };
@@ -29,6 +34,9 @@ exports.AppModule = AppModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
+            schedule_1.ScheduleModule.forRoot(),
+            event_emitter_1.EventEmitterModule.forRoot(),
+            throttler_1.ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
             prisma_module_js_1.PrismaModule,
             auth_module_js_1.AuthModule,
             users_module_js_1.UsersModule,
@@ -40,12 +48,12 @@ exports.AppModule = AppModule = __decorate([
             messages_module_js_1.MessagesModule,
             notifications_module_js_1.NotificationsModule,
             admin_module_js_1.AdminModule,
+            scheduler_module_js_1.SchedulerModule,
+            uploads_module_js_1.UploadsModule,
         ],
         providers: [
-            {
-                provide: core_1.APP_GUARD,
-                useClass: jwt_auth_guard_js_1.JwtAuthGuard,
-            },
+            { provide: core_1.APP_GUARD, useClass: throttler_1.ThrottlerGuard },
+            { provide: core_1.APP_GUARD, useClass: jwt_auth_guard_js_1.JwtAuthGuard },
         ],
     })
 ], AppModule);

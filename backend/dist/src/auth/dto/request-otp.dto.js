@@ -10,12 +10,18 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RequestOtpDto = void 0;
+const openapi = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
+const swagger_1 = require("@nestjs/swagger");
 class RequestOtpDto {
     phone;
+    static _OPENAPI_METADATA_FACTORY() {
+        return { phone: { required: true, type: () => String, pattern: "^\\+94[0-9]{9}$" } };
+    }
 }
 exports.RequestOtpDto = RequestOtpDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '+94771234567', description: 'Sri Lanka phone, +94XXXXXXXXX' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.Matches)(/^\+94[0-9]{9}$/, { message: 'Phone must be a valid Sri Lanka number: +94XXXXXXXXX' }),
     __metadata("design:type", String)

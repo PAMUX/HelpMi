@@ -11,11 +11,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RatingsService = void 0;
 const common_1 = require("@nestjs/common");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_js_1 = require("../prisma/prisma.service.js");
+const notification_events_js_1 = require("../notifications/events/notification-events.js");
 let RatingsService = class RatingsService {
     prisma;
-    constructor(prisma) {
+    events;
+    constructor(prisma, events) {
         this.prisma = prisma;
+        this.events = events;
     }
     async create(raterId, dto) {
         const task = await this.prisma.task.findUnique({ where: { id: dto.taskId } });
@@ -48,6 +52,12 @@ let RatingsService = class RatingsService {
             },
         });
         await this.updateDoerStats(rateeId);
+        this.events.emit(notification_events_js_1.NotificationEvent.RATING_RECEIVED, {
+            rateeId,
+            raterId,
+            taskId: dto.taskId,
+            score: dto.score,
+        });
         return rating;
     }
     async getForUser(userId) {
@@ -94,6 +104,7 @@ let RatingsService = class RatingsService {
 exports.RatingsService = RatingsService;
 exports.RatingsService = RatingsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService,
+        event_emitter_1.EventEmitter2])
 ], RatingsService);
 //# sourceMappingURL=ratings.service.js.map

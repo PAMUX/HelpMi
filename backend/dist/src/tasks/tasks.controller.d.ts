@@ -2,6 +2,7 @@ import { TasksService } from './tasks.service.js';
 import { CreateTaskDto } from './dto/create-task.dto.js';
 import { NearbyTasksDto } from './dto/nearby-tasks.dto.js';
 import { CompleteTaskDto } from './dto/complete-task.dto.js';
+import { RaiseDisputeDto } from './dto/raise-dispute.dto.js';
 import { type JwtPayload } from '../common/decorators/current-user.decorator.js';
 export declare class TasksController {
     private tasks;
@@ -22,11 +23,13 @@ export declare class TasksController {
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -34,10 +37,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -69,11 +70,13 @@ export declare class TasksController {
         };
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -81,10 +84,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -117,11 +118,13 @@ export declare class TasksController {
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -129,10 +132,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -165,11 +166,13 @@ export declare class TasksController {
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -177,10 +180,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -188,7 +189,7 @@ export declare class TasksController {
         confirmedAt: Date | null;
         isFeatured: boolean;
     })[]>;
-    findOne(id: string): Promise<{
+    findOne(id: string, user: JwtPayload): Promise<{
         category: {
             minTier: import("@prisma/client").$Enums.DoerTier;
             id: string;
@@ -201,55 +202,19 @@ export declare class TasksController {
             sortOrder: number;
             createdAt: Date;
         };
-        escrow: {
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            taskId: string;
-            posterId: string;
-            status: import("@prisma/client").$Enums.EscrowStatus;
-            doerId: string | null;
-            taskBudget: import("@prisma/client-runtime-utils").Decimal;
-            platformFeeFromPoster: import("@prisma/client-runtime-utils").Decimal;
-            platformFeeFromDoer: import("@prisma/client-runtime-utils").Decimal;
-            trustFundReserve: import("@prisma/client-runtime-utils").Decimal;
-            netDoerPayout: import("@prisma/client-runtime-utils").Decimal | null;
-            payherePaymentId: string | null;
-            payhereOrderId: string | null;
-            payoutMethod: import("@prisma/client").$Enums.PayoutMethod;
-            heldAt: Date | null;
-            releasedAt: Date | null;
-            refundedAt: Date | null;
-        } | null;
-        dispute: {
-            id: string;
-            createdAt: Date;
-            taskId: string;
-            status: import("@prisma/client").$Enums.DisputeStatus;
-            raisedById: string;
-            reason: string;
-            resolutionNote: string | null;
-            resolvedByPhone: string | null;
-            resolvedAt: Date | null;
-        } | null;
         poster: {
             id: string;
             name: string | null;
             avatarUrl: string | null;
         };
-        doer: {
-            id: string;
-            name: string | null;
-            avatarUrl: string | null;
-        } | null;
-    } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -257,10 +222,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -272,16 +235,18 @@ export declare class TasksController {
         poster: {
             id: string;
             name: string | null;
-            phone: string;
+            avatarUrl: string | null;
         };
     } & {
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -289,10 +254,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -303,11 +266,13 @@ export declare class TasksController {
     markStarted(id: string, user: JwtPayload): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -315,10 +280,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -329,11 +292,13 @@ export declare class TasksController {
     markComplete(id: string, user: JwtPayload, dto: CompleteTaskDto): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -341,10 +306,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -355,11 +318,13 @@ export declare class TasksController {
     confirm(id: string, user: JwtPayload): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -367,10 +332,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -381,11 +344,13 @@ export declare class TasksController {
     cancel(id: string, user: JwtPayload): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -393,10 +358,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;
@@ -404,14 +367,16 @@ export declare class TasksController {
         confirmedAt: Date | null;
         isFeatured: boolean;
     }>;
-    raiseDispute(id: string, user: JwtPayload, reason: string): Promise<{
+    raiseDispute(id: string, user: JwtPayload, dto: RaiseDisputeDto): Promise<{
         id: string;
         createdAt: Date;
+        description: string;
+        title: string;
         updatedAt: Date;
+        doerId: string | null;
+        status: import("@prisma/client").$Enums.TaskStatus;
         posterId: string;
         categoryId: string;
-        title: string;
-        description: string;
         photoUrls: string[];
         locationLat: number;
         locationLng: number;
@@ -419,10 +384,8 @@ export declare class TasksController {
         budget: import("@prisma/client-runtime-utils").Decimal;
         paymentMode: import("@prisma/client").$Enums.PaymentMode;
         requiredTier: import("@prisma/client").$Enums.DoerTier;
-        status: import("@prisma/client").$Enums.TaskStatus;
         scheduledStart: Date | null;
         scheduledEnd: Date | null;
-        doerId: string | null;
         acceptedAt: Date | null;
         startedAt: Date | null;
         completedAt: Date | null;

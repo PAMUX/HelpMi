@@ -11,11 +11,15 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MessagesService = void 0;
 const common_1 = require("@nestjs/common");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_js_1 = require("../prisma/prisma.service.js");
+const notification_events_js_1 = require("../notifications/events/notification-events.js");
 let MessagesService = class MessagesService {
     prisma;
-    constructor(prisma) {
+    events;
+    constructor(prisma, events) {
         this.prisma = prisma;
+        this.events = events;
     }
     async getMessages(taskId, userId) {
         const task = await this.prisma.task.findUnique({ where: { id: taskId } });
@@ -44,7 +48,7 @@ let MessagesService = class MessagesService {
         if (['COMPLETED', 'CANCELLED'].includes(task.status)) {
             throw new common_1.ForbiddenException('Cannot send messages on a closed task');
         }
-        return this.prisma.message.create({
+        const message = await this.prisma.message.create({
             data: {
                 taskId,
                 senderId,
@@ -53,6 +57,16 @@ let MessagesService = class MessagesService {
             },
             include: { sender: { select: { id: true, name: true, avatarUrl: true } } },
         });
+        const recipientId = task.posterId === senderId ? task.doerId : task.posterId;
+        if (recipientId) {
+            this.events.emit(notification_events_js_1.NotificationEvent.MESSAGE_SENT, {
+                taskId,
+                senderId,
+                recipientId,
+                preview: dto.content.slice(0, 80),
+            });
+        }
+        return message;
     }
     async getUnreadCount(userId) {
         const count = await this.prisma.message.count({
@@ -70,6 +84,7 @@ let MessagesService = class MessagesService {
 exports.MessagesService = MessagesService;
 exports.MessagesService = MessagesService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService,
+        event_emitter_1.EventEmitter2])
 ], MessagesService);
 //# sourceMappingURL=messages.service.js.map

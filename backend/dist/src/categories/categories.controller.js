@@ -10,7 +10,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CategoriesController = void 0;
+const openapi = require("@nestjs/swagger");
 const common_1 = require("@nestjs/common");
+const swagger_1 = require("@nestjs/swagger");
 const categories_service_js_1 = require("./categories.service.js");
 const public_decorator_js_1 = require("../common/decorators/public.decorator.js");
 let CategoriesController = class CategoriesController {
@@ -24,12 +26,15 @@ let CategoriesController = class CategoriesController {
 };
 exports.CategoriesController = CategoriesController;
 __decorate([
+    (0, swagger_1.ApiOperation)({ summary: 'List active task categories' }),
     (0, common_1.Get)(),
+    openapi.ApiResponse({ status: 200, type: Object }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], CategoriesController.prototype, "findAll", null);
 exports.CategoriesController = CategoriesController = __decorate([
+    (0, swagger_1.ApiTags)('categories'),
     (0, public_decorator_js_1.Public)(),
     (0, common_1.Controller)('categories'),
     __metadata("design:paramtypes", [categories_service_js_1.CategoriesService])

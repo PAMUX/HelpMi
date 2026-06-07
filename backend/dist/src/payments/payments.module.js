@@ -10,13 +10,16 @@ exports.PaymentsModule = void 0;
 const common_1 = require("@nestjs/common");
 const payments_service_js_1 = require("./payments.service.js");
 const payments_controller_js_1 = require("./payments.controller.js");
+const payout_service_js_1 = require("./payout.service.js");
+const payout_provider_js_1 = require("./providers/payout.provider.js");
 let PaymentsModule = class PaymentsModule {
 };
 exports.PaymentsModule = PaymentsModule;
 exports.PaymentsModule = PaymentsModule = __decorate([
     (0, common_1.Module)({
-        providers: [payments_service_js_1.PaymentsService],
+        providers: [payments_service_js_1.PaymentsService, payout_service_js_1.PayoutService, payout_provider_js_1.PayoutProvider],
         controllers: [payments_controller_js_1.PaymentsController],
+        exports: [payout_service_js_1.PayoutService],
     })
 ], PaymentsModule);
 //# sourceMappingURL=payments.module.js.map

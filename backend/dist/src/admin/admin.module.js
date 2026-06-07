@@ -10,11 +10,13 @@ exports.AdminModule = void 0;
 const common_1 = require("@nestjs/common");
 const admin_service_js_1 = require("./admin.service.js");
 const admin_controller_js_1 = require("./admin.controller.js");
+const payments_module_js_1 = require("../payments/payments.module.js");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
     (0, common_1.Module)({
+        imports: [payments_module_js_1.PaymentsModule],
         providers: [admin_service_js_1.AdminService],
         controllers: [admin_controller_js_1.AdminController],
     })

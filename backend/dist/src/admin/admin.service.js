@@ -11,11 +11,18 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminService = void 0;
 const common_1 = require("@nestjs/common");
+const event_emitter_1 = require("@nestjs/event-emitter");
 const prisma_service_js_1 = require("../prisma/prisma.service.js");
+const notification_events_js_1 = require("../notifications/events/notification-events.js");
+const payout_service_js_1 = require("../payments/payout.service.js");
 let AdminService = class AdminService {
     prisma;
-    constructor(prisma) {
+    events;
+    payouts;
+    constructor(prisma, events, payouts) {
         this.prisma = prisma;
+        this.events = events;
+        this.payouts = payouts;
     }
     getPendingKyc() {
         return this.prisma.doerProfile.findMany({
@@ -35,6 +42,11 @@ let AdminService = class AdminService {
         await this.prisma.kycReview.create({
             data: { doerProfileId: profileId, reviewerPhone: adminPhone, action: 'APPROVED' },
         });
+        this.events.emit(notification_events_js_1.NotificationEvent.KYC_REVIEWED, {
+            userId: profile.userId,
+            approved: true,
+            tier,
+        });
         return updated;
     }
     async rejectKyc(profileId, adminPhone, note) {
@@ -47,6 +59,11 @@ let AdminService = class AdminService {
         });
         await this.prisma.kycReview.create({
             data: { doerProfileId: profileId, reviewerPhone: adminPhone, action: 'REJECTED', note },
+        });
+        this.events.emit(notification_events_js_1.NotificationEvent.KYC_REVIEWED, {
+            userId: profile.userId,
+            approved: false,
+            note,
         });
         return updated;
     }
@@ -121,6 +138,15 @@ let AdminService = class AdminService {
         });
         return { resolved: true };
     }
+    listPayouts(status) {
+        return this.payouts.adminList(status);
+    }
+    markPayoutPaid(payoutId, providerRef) {
+        return this.payouts.markPaid(payoutId, providerRef);
+    }
+    exportPayoutsCsv(status) {
+        return this.payouts.exportCsv(status);
+    }
     async getStats() {
         const [users, tasks, completedTasks, openDisputes, totalEscrowHeld] = await Promise.all([
             this.prisma.user.count(),
@@ -144,6 +170,8 @@ let AdminService = class AdminService {
 exports.AdminService = AdminService;
 exports.AdminService = AdminService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_js_1.PrismaService,
+        event_emitter_1.EventEmitter2,
+        payout_service_js_1.PayoutService])
 ], AdminService);
 //# sourceMappingURL=admin.service.js.map

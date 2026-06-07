@@ -6,11 +6,11 @@ export declare class NotificationsController {
     getAll(user: JwtPayload): Promise<{
         id: string;
         createdAt: Date;
+        type: import("@prisma/client").$Enums.NotificationType;
+        title: string;
         data: import("@prisma/client/runtime/client").JsonValue | null;
         userId: string;
         taskId: string | null;
-        title: string;
-        type: import("@prisma/client").$Enums.NotificationType;
         readAt: Date | null;
         body: string;
     }[]>;

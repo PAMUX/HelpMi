@@ -57,4 +57,50 @@ describe('UploadsService.presign (P2-C)', () => {
     } as any);
     expect(storage.presignPut).toHaveBeenCalledWith('pub', expect.any(String), 'image/webp', 300);
   });
+
+  it('G-3: new KYC purposes (address/police/license/skill) are private', async () => {
+    for (const purpose of [
+      UploadPurpose.KYC_ADDRESS,
+      UploadPurpose.KYC_POLICE,
+      UploadPurpose.KYC_LICENSE,
+      UploadPurpose.KYC_SKILL,
+    ]) {
+      const res = await service.presign('user1', { purpose, contentType: 'image/jpeg' } as any);
+      expect(res.isPrivate).toBe(true);
+      expect(res.fileUrl).toBeNull();
+    }
+  });
+});
+
+describe('UploadsService.presignRead (G-3 key scoping)', () => {
+  let storage: any;
+  let service: UploadsService;
+
+  beforeEach(() => {
+    storage = buildStorage();
+    service = new UploadsService(storage, buildConfig());
+  });
+
+  it('signs a GET against the private bucket for a well-formed KYC key', async () => {
+    const res = await service.presignRead('kyc/nic/user1/abc-123.jpg');
+    expect(storage.bucketFor).toHaveBeenCalledWith(true);
+    expect(storage.presignGet).toHaveBeenCalledWith('priv', 'kyc/nic/user1/abc-123.jpg', 300);
+    expect(res.url).toBe('https://signed.example/get');
+  });
+
+  it('rejects traversal, URLs, non-KYC prefixes and bad extensions', async () => {
+    const bad = [
+      '../../etc/passwd',
+      'kyc/nic/user1/../../secret.jpg',
+      'kyc/nic/user1/file.exe',
+      'tasks/photos/user1/a.jpg',
+      'https://evil.example/kyc/nic/u/a.jpg',
+      'kyc/unknown/user1/a.jpg',
+      '',
+    ];
+    for (const key of bad) {
+      await expect(service.presignRead(key)).rejects.toBeTruthy();
+    }
+    expect(storage.presignGet).not.toHaveBeenCalled();
+  });
 });

@@ -3,8 +3,20 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationEvent } from '../notifications/events/notification-events.js';
 import { PayoutService } from '../payments/payout.service.js';
+import { UploadsService } from '../uploads/uploads.service.js';
+import { ANY_KYC_KEY_PATTERN } from '../uploads/upload-purpose.js';
 
 type PayoutStatusFilter = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
+
+export interface KycDocumentView {
+  /** Stored value (storage key; legacy rows may hold an opaque URL). */
+  key: string;
+  /** Short-TTL presigned read URL, or null when the value is unreadable. */
+  url: string | null;
+  expiresAt: string | null;
+  /** True when the stored value predates the G-3 key contract. */
+  legacy?: boolean;
+}
 
 @Injectable()
 export class AdminService {
@@ -12,6 +24,7 @@ export class AdminService {
     private prisma: PrismaService,
     private events: EventEmitter2,
     private payouts: PayoutService,
+    private uploads: UploadsService,
   ) {}
 
   // KYC
@@ -21,6 +34,48 @@ export class AdminService {
       include: { user: { select: { id: true, name: true, phone: true, createdAt: true } } },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * G-3: short-TTL presigned read URLs for a doer's private KYC documents.
+   * The server derives every key from the stored profile row — client-supplied
+   * keys are never accepted, which is what keeps the private bucket IDOR-free.
+   * Values from before the key contract (URL-shaped) are flagged `legacy`.
+   */
+  async getKycDocuments(profileId: string) {
+    const profile = await this.prisma.doerProfile.findUnique({
+      where: { id: profileId },
+      include: { user: { select: { id: true, name: true, phone: true } } },
+    });
+    if (!profile) throw new NotFoundException('Doer profile not found');
+
+    const fields: Record<string, string | null> = {
+      nicPhoto: profile.nicPhotoUrl,
+      selfie: profile.selfieUrl,
+      addressProof: profile.addressProofUrl,
+      policeClearance: profile.policeClearanceUrl,
+      drivingLicense: profile.drivingLicenseUrl,
+      skillProof: profile.skillProofUrl,
+    };
+
+    const documents: Record<string, KycDocumentView> = {};
+    for (const [name, value] of Object.entries(fields)) {
+      if (!value) continue;
+      if (ANY_KYC_KEY_PATTERN.test(value)) {
+        const { url, expiresAt } = await this.uploads.presignRead(value);
+        documents[name] = { key: value, url, expiresAt };
+      } else {
+        documents[name] = { key: value, url: null, expiresAt: null, legacy: true };
+      }
+    }
+
+    return {
+      profileId: profile.id,
+      user: profile.user,
+      kycStatus: profile.kycStatus,
+      tier: profile.tier,
+      documents,
+    };
   }
 
   async approveKyc(profileId: string, adminPhone: string, tier: 'BRONZE' | 'SILVER' | 'GOLD' = 'BRONZE') {

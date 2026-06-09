@@ -73,13 +73,17 @@ export class PaymentsService {
     const baseUrl =
       mode === 'sandbox' ? 'https://sandbox.payhere.lk/pay/checkout' : 'https://www.payhere.lk/pay/checkout';
 
+    // G-8: callback URLs are environment-driven (previously hardcoded to
+    // helpmi.lk, which silently broke webhooks in any other environment).
+    const { returnUrl, cancelUrl, notifyUrl } = this.callbackUrls();
+
     return {
       checkoutUrl: baseUrl,
       params: {
         merchant_id: merchantId,
-        return_url: `https://helpmi.lk/payment/return`,
-        cancel_url: `https://helpmi.lk/payment/cancel`,
-        notify_url: `https://helpmi.lk/api/payments/webhook`,
+        return_url: returnUrl,
+        cancel_url: cancelUrl,
+        notify_url: notifyUrl,
         order_id: orderId,
         items: task.title,
         currency,
@@ -87,6 +91,30 @@ export class PaymentsService {
         hash,
       },
     };
+  }
+
+  /**
+   * G-8: derive PayHere callback URLs from APP_PUBLIC_BASE_URL, with optional
+   * explicit overrides (PAYHERE_RETURN_URL / PAYHERE_CANCEL_URL /
+   * PAYHERE_NOTIFY_URL). Fails fast with an actionable message when missing —
+   * a checkout whose webhook can never arrive must not be issued at all.
+   * Note: local sandbox testing needs a public tunnel (ngrok/cloudflared).
+   */
+  private callbackUrls(): { returnUrl: string; cancelUrl: string; notifyUrl: string } {
+    const base = (this.config.get<string>('APP_PUBLIC_BASE_URL') ?? '').trim().replace(/\/$/, '');
+    const pick = (key: string, fallback: string): string => {
+      const explicit = (this.config.get<string>(key) ?? '').trim();
+      return explicit || fallback;
+    };
+    const returnUrl = pick('PAYHERE_RETURN_URL', base ? `${base}/payment/return` : '');
+    const cancelUrl = pick('PAYHERE_CANCEL_URL', base ? `${base}/payment/cancel` : '');
+    const notifyUrl = pick('PAYHERE_NOTIFY_URL', base ? `${base}/api/payments/webhook` : '');
+    if (!returnUrl || !cancelUrl || !notifyUrl) {
+      throw new BadRequestException(
+        'Payment configuration incomplete: set APP_PUBLIC_BASE_URL (or PAYHERE_*_URL overrides)',
+      );
+    }
+    return { returnUrl, cancelUrl, notifyUrl };
   }
 
   async handleWebhook(body: Record<string, string>) {

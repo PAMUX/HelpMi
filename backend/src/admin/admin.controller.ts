@@ -29,6 +29,14 @@ export class AdminController {
     return this.admin.getPendingKyc();
   }
 
+  @ApiOperation({
+    summary: 'G-3: short-TTL presigned read URLs for a doer profile’s KYC documents',
+  })
+  @Get('kyc/:id/documents')
+  getKycDocuments(@Param('id') id: string) {
+    return this.admin.getKycDocuments(id);
+  }
+
   @ApiOperation({ summary: 'Approve KYC + set tier' })
   @Patch('kyc/:id/approve')
   approveKyc(

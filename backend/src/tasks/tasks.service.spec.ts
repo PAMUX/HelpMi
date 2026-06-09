@@ -24,6 +24,7 @@ function buildPrismaMock() {
       findUnique: jest.fn(),
       findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 't1', confirmedAt: new Date() }),
       update: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 't1', ...data })),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     escrow: { create: jest.fn(), findUnique: jest.fn() },
     postingFee: { create: jest.fn() },
@@ -81,13 +82,28 @@ describe('TasksService.accept (funding gate + no phone leak)', () => {
     await expect(service.accept('t1', 'doer1')).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('accepts when HELD, emits TASK_ACCEPTED, does not select poster phone', async () => {
+  it('accepts when HELD via CAS, emits TASK_ACCEPTED, does not select poster phone', async () => {
     prisma.escrow.findUnique.mockResolvedValue({ status: 'HELD' });
     await service.accept('t1', 'doer1');
-    const include = prisma.task.update.mock.calls[0][0].include;
+    // G-5: assignment must be a guarded compare-and-swap, not a blind update.
+    expect(prisma.task.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 't1', status: 'OPEN', doerId: null },
+        data: expect.objectContaining({ status: 'ASSIGNED', doerId: 'doer1' }),
+      }),
+    );
+    const include = prisma.task.findUniqueOrThrow.mock.calls[0][0].include;
     expect(include.poster.select.phone).toBeUndefined();
     expect(events.emit).toHaveBeenCalledWith(
       NotificationEvent.TASK_ACCEPTED, expect.objectContaining({ taskId: 't1' }));
+  });
+
+  it('G-5 CAS-miss: a concurrent winner means 400 and NO event for the loser', async () => {
+    prisma.escrow.findUnique.mockResolvedValue({ status: 'HELD' });
+    prisma.task.updateMany.mockResolvedValue({ count: 0 }); // someone else won the row
+    await expect(service.accept('t1', 'doer1')).rejects.toBeInstanceOf(BadRequestException);
+    expect(events.emit).not.toHaveBeenCalled();
+    expect(prisma.task.findUniqueOrThrow).not.toHaveBeenCalled();
   });
 });
 

@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { StorageProvider } from './storage.provider.js';
 import { PresignDto } from './dto/presign.dto.js';
 import {
+  ANY_KYC_KEY_PATTERN,
   CONTENT_TYPE_EXT,
   PRIVATE_PURPOSES,
   PURPOSE_PREFIX,
@@ -48,7 +49,13 @@ export class UploadsService {
   }
 
   /** Presigned read URL for a private object (e.g. admin reviewing KYC). */
-  presignRead(key: string): Promise<{ url: string; expiresAt: string }> {
+  async presignRead(key: string): Promise<{ url: string; expiresAt: string }> {
+    // G-3: only well-formed private KYC keys are readable through this path.
+    // The anchored pattern excludes path traversal and any non-KYC object in
+    // the private bucket by construction.
+    if (!ANY_KYC_KEY_PATTERN.test(key)) {
+      throw new BadRequestException('Invalid KYC document key');
+    }
     const bucket = this.storage.bucketFor(true);
     const expiresIn = this.config.get<number>('UPLOAD_PRESIGN_TTL_SECONDS') ?? 300;
     return this.storage.presignGet(bucket, key, expiresIn).then((url) => ({

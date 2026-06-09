@@ -18,10 +18,12 @@ import { AdminModule } from './admin/admin.module.js';
 import { SchedulerModule } from './scheduler/scheduler.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { validateEnv } from './config/env.validation.js';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    // G-9: refuse to boot with production-unsafe configuration.
+    ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     // P2-B: global baseline throttle; auth routes tighten this with @Throttle.

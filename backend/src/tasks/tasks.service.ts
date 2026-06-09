@@ -192,10 +192,22 @@ export class TasksService {
       }
     }
 
-    // P3-C: do not leak the poster's phone number to the doer.
-    const updated = await this.prisma.task.update({
-      where: { id: taskId },
+    // G-5: compare-and-swap assignment. The conditional WHERE is the single
+    // authority on who wins; the checks above are fast-fail UX only. Two
+    // concurrent accepts can both pass those checks, but only one update can
+    // match { status: OPEN, doerId: null } — the loser gets a clean 400 and
+    // no TASK_ACCEPTED event (same pattern as releaseEscrow's CAS).
+    const result = await this.prisma.task.updateMany({
+      where: { id: taskId, status: 'OPEN', doerId: null },
       data: { status: 'ASSIGNED', doerId, acceptedAt: new Date() },
+    });
+    if (result.count === 0) {
+      throw new BadRequestException('Task is no longer available');
+    }
+
+    // P3-C: do not leak the poster's phone number to the doer.
+    const updated = await this.prisma.task.findUniqueOrThrow({
+      where: { id: taskId },
       include: { poster: { select: { id: true, name: true, avatarUrl: true } } },
     });
 

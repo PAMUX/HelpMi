@@ -23,13 +23,33 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+HelpMi backend — odd-jobs marketplace for Sri Lanka (NestJS + Prisma + PostgreSQL).
 
 ## Project setup
 
 ```bash
 $ npm install
+$ cp .env.example .env   # then fill values — see notes below
 ```
+
+## Environment & payments setup (G-8 / G-9)
+
+- **Config validation (G-9):** with `NODE_ENV=production` the app refuses to
+  boot unless secrets/providers are production-safe (strong `JWT_SECRET`,
+  `OTP_PEPPER`, `CORS_ORIGINS`, https `APP_PUBLIC_BASE_URL`, non-console
+  SMS/push providers, live PayHere credentials, `ADMIN_PHONES`). The startup
+  error lists every violation by key.
+- **PayHere callback URLs (G-8):** `return_url` / `cancel_url` / `notify_url`
+  are derived from `APP_PUBLIC_BASE_URL` (overridable via
+  `PAYHERE_RETURN_URL`, `PAYHERE_CANCEL_URL`, `PAYHERE_NOTIFY_URL`).
+  **Local sandbox testing:** PayHere must be able to reach the webhook, so run
+  a public tunnel (e.g. `ngrok http 3000`) and set `APP_PUBLIC_BASE_URL` to the
+  tunnel URL before initiating a sandbox payment. A checkout is refused if no
+  base URL is configured — better no checkout than one whose webhook can never
+  arrive.
+- **Payouts (G-7A):** launch scope is **bank transfer only** (manual CSV
+  batch); mobile-wallet payouts are disabled until the PayHere payout API
+  integration ships.
 
 ## Compile and run the project
 

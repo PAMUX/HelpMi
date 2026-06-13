@@ -92,6 +92,18 @@ export function collectEnvIssues(env: Record<string, unknown>): EnvIssue[] {
     }
   }
 
+  // G-1: Merchant-API (Business App) credentials power refunds. Without them
+  // every refund queues as PENDING — unacceptable in production.
+  for (const key of ['PAYHERE_APP_ID', 'PAYHERE_APP_SECRET'] as const) {
+    const value = str(env, key);
+    if (!value || value.startsWith('your-')) {
+      issues.push({
+        key,
+        problem: 'must be set in production (PayHere Business App — refund execution)',
+      });
+    }
+  }
+
   if (!str(env, 'ADMIN_PHONES')) {
     issues.push({ key: 'ADMIN_PHONES', problem: 'must be set in production (admin allowlist)' });
   }

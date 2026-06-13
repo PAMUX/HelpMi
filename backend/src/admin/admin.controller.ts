@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Body, Query, Header, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Param, Body, Query, Header, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AdminService } from './admin.service.js';
 import { AdminGuard } from '../common/guards/admin.guard.js';
@@ -9,6 +9,15 @@ import { ResolveDisputeDto } from './dto/resolve-dispute.dto.js';
 import { MarkPaidDto } from './dto/mark-paid.dto.js';
 
 type PayoutStatusFilter = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
+type RefundStatusFilter = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+type TaskStatusFilter =
+  | 'PENDING_PAYMENT'
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'DISPUTED';
 
 @ApiTags('admin')
 @ApiBearerAuth('access-token')
@@ -109,5 +118,43 @@ export class AdminController {
   @Header('Content-Disposition', 'attachment; filename="payouts.csv"')
   exportPayouts(@Query('status') status?: PayoutStatusFilter) {
     return this.admin.exportPayoutsCsv(status);
+  }
+
+  // --- G-1: refund tooling ---
+
+  @ApiOperation({ summary: 'G-1: list refunds (filter by status)' })
+  @Get('refunds')
+  listRefunds(@Query('status') status?: RefundStatusFilter) {
+    return this.admin.listRefunds(status);
+  }
+
+  @ApiOperation({ summary: 'G-1: manually initiate a refund for a task’s escrow' })
+  @Post('escrows/:taskId/refund')
+  initiateEscrowRefund(@Param('taskId') taskId: string, @CurrentUser() admin: JwtPayload) {
+    return this.admin.initiateEscrowRefund(taskId, admin.phone);
+  }
+
+  @ApiOperation({ summary: 'G-1: retry a PENDING/FAILED refund' })
+  @Post('refunds/:id/retry')
+  retryRefund(@Param('id') id: string, @CurrentUser() admin: JwtPayload) {
+    return this.admin.retryRefund(id, admin.phone);
+  }
+
+  // --- G-2: task recovery ---
+
+  @ApiOperation({ summary: 'G-2: browse tasks (filter by status; includes escrow state)' })
+  @Get('tasks')
+  listTasks(
+    @Query('status') status?: TaskStatusFilter,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.admin.listTasks(status, page ? +page : 1, limit ? +limit : 50);
+  }
+
+  @ApiOperation({ summary: 'G-2: force-cancel a task (auto-refunds HELD escrow)' })
+  @Post('tasks/:id/force-cancel')
+  forceCancelTask(@Param('id') id: string, @CurrentUser() admin: JwtPayload) {
+    return this.admin.forceCancelTask(id, admin.phone);
   }
 }

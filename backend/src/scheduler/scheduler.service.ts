@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { TasksService } from '../tasks/tasks.service.js';
+import { RefundService } from '../payments/refund.service.js';
 
 const AUTO_RELEASE_AFTER_HOURS = 24;
 
@@ -12,7 +13,21 @@ export class SchedulerService {
   constructor(
     private prisma: PrismaService,
     private tasks: TasksService,
+    private refunds: RefundService,
   ) {}
+
+  /**
+   * G-2: hourly refund reconcile — re-drives REFUND_PENDING escrows whose
+   * provider call failed/was queued, and repairs any CANCELLED+HELD anomaly.
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async reconcileRefunds(): Promise<{ scanned: number; completed: number }> {
+    const result = await this.refunds.reconcile();
+    if (result.scanned > 0) {
+      this.logger.log(`Refund reconcile: ${result.scanned} scanned, ${result.completed} completed`);
+    }
+    return result;
+  }
 
   @Cron(CronExpression.EVERY_HOUR)
   async autoReleaseEscrows(): Promise<{ scanned: number; released: number }> {

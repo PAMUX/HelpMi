@@ -19,6 +19,8 @@ describe('env.validation (G-9)', () => {
     PAYHERE_MODE: 'live',
     PAYHERE_MERCHANT_ID: '1230001',
     PAYHERE_MERCHANT_SECRET: 'MjEwNDY1OTk1NDIw',
+    PAYHERE_APP_ID: '4OVxz5N9PAn4',
+    PAYHERE_APP_SECRET: '8nJzkVzAGw84LDBGiNpJ8l4',
     ADMIN_PHONES: '+94770000001',
   };
 
@@ -82,6 +84,13 @@ describe('env.validation (G-9)', () => {
     );
     expect(issueKeys({ ...prodSafe, PAYHERE_MERCHANT_SECRET: '' })).toContain(
       'PAYHERE_MERCHANT_SECRET',
+    );
+  });
+
+  it('G-1: requires PayHere Business App (refund API) credentials in production', () => {
+    expect(issueKeys({ ...prodSafe, PAYHERE_APP_ID: '' })).toContain('PAYHERE_APP_ID');
+    expect(issueKeys({ ...prodSafe, PAYHERE_APP_SECRET: 'your-app-secret' })).toContain(
+      'PAYHERE_APP_SECRET',
     );
   });
 

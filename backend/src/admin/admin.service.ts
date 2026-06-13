@@ -1,12 +1,24 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationEvent } from '../notifications/events/notification-events.js';
 import { PayoutService } from '../payments/payout.service.js';
 import { UploadsService } from '../uploads/uploads.service.js';
 import { ANY_KYC_KEY_PATTERN } from '../uploads/upload-purpose.js';
+// G-1/G-2: refund tooling + task recovery.
+import { RefundService } from '../payments/refund.service.js';
+import { TasksService } from '../tasks/tasks.service.js';
 
 type PayoutStatusFilter = 'PENDING' | 'PROCESSING' | 'PAID' | 'FAILED';
+type RefundStatusFilter = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+type TaskStatusFilter =
+  | 'PENDING_PAYMENT'
+  | 'OPEN'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED'
+  | 'DISPUTED';
 
 export interface KycDocumentView {
   /** Stored value (storage key; legacy rows may hold an opaque URL). */
@@ -25,6 +37,8 @@ export class AdminService {
     private events: EventEmitter2,
     private payouts: PayoutService,
     private uploads: UploadsService,
+    private refunds: RefundService,
+    private tasks: TasksService,
   ) {}
 
   // KYC
@@ -204,6 +218,54 @@ export class AdminService {
     });
 
     return { resolved: true };
+  }
+
+  // --- G-1: Refund tooling ---
+
+  listRefunds(status?: RefundStatusFilter) {
+    return this.refunds.list(status);
+  }
+
+  /**
+   * Manual refund for a task's escrow (approved decision #2). DISPUTED escrow
+   * is excluded — that money is decided through dispute resolution (G-4).
+   */
+  async initiateEscrowRefund(taskId: string, adminPhone: string) {
+    const escrow = await this.prisma.escrow.findUnique({ where: { taskId } });
+    if (!escrow) throw new NotFoundException('Escrow not found for this task');
+    if (escrow.status === 'DISPUTED') {
+      throw new BadRequestException('Escrow is disputed — resolve the dispute instead');
+    }
+    return this.refunds.initiateForEscrow({
+      escrowId: escrow.id,
+      taskId,
+      reason: 'ADMIN',
+      initiatedBy: `admin:${adminPhone}`,
+    });
+  }
+
+  retryRefund(refundId: string, adminPhone: string) {
+    return this.refunds.retry(refundId, adminPhone);
+  }
+
+  // --- G-2: Task recovery ---
+
+  listTasks(status?: TaskStatusFilter, page = 1, limit = 50) {
+    return this.prisma.task.findMany({
+      where: status ? { status } : undefined,
+      include: {
+        poster: { select: { id: true, name: true, phone: true } },
+        doer: { select: { id: true, name: true, phone: true } },
+        escrow: { select: { status: true, payherePaymentId: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+  }
+
+  forceCancelTask(taskId: string, adminPhone: string) {
+    return this.tasks.forceCancel(taskId, adminPhone);
   }
 
   // P3-A: Payouts

@@ -12,8 +12,12 @@ import { NearbyTasksDto } from './dto/nearby-tasks.dto.js';
 import { CompleteTaskDto } from './dto/complete-task.dto.js';
 import { NotificationEvent } from '../notifications/events/notification-events.js';
 import { PayoutService } from '../payments/payout.service.js';
+import { RefundService } from '../payments/refund.service.js';
 
 const TIER_RANK: Record<DoerTier, number> = { BRONZE: 0, SILVER: 1, GOLD: 2 };
+
+// G-2: the only states a task can be cancelled from (allowlist == CAS guard).
+const CANCELLABLE_STATUSES = ['PENDING_PAYMENT', 'OPEN', 'ASSIGNED', 'IN_PROGRESS'] as const;
 
 @Injectable()
 export class TasksService {
@@ -21,6 +25,7 @@ export class TasksService {
     private prisma: PrismaService,
     private events: EventEmitter2,
     private payouts: PayoutService,
+    private refunds: RefundService,
   ) {}
 
   async create(posterId: string, dto: CreateTaskDto) {
@@ -192,10 +197,22 @@ export class TasksService {
       }
     }
 
-    // P3-C: do not leak the poster's phone number to the doer.
-    const updated = await this.prisma.task.update({
-      where: { id: taskId },
+    // G-5: compare-and-swap assignment. The conditional WHERE is the single
+    // authority on who wins; the checks above are fast-fail UX only. Two
+    // concurrent accepts can both pass those checks, but only one update can
+    // match { status: OPEN, doerId: null } — the loser gets a clean 400 and
+    // no TASK_ACCEPTED event (same pattern as releaseEscrow's CAS).
+    const result = await this.prisma.task.updateMany({
+      where: { id: taskId, status: 'OPEN', doerId: null },
       data: { status: 'ASSIGNED', doerId, acceptedAt: new Date() },
+    });
+    if (result.count === 0) {
+      throw new BadRequestException('Task is no longer available');
+    }
+
+    // P3-C: do not leak the poster's phone number to the doer.
+    const updated = await this.prisma.task.findUniqueOrThrow({
+      where: { id: taskId },
       include: { poster: { select: { id: true, name: true, avatarUrl: true } } },
     });
 
@@ -354,34 +371,77 @@ export class TasksService {
     const isDoer = task.doerId === userId;
     if (!isPoster && !isDoer) throw new ForbiddenException('Not authorized');
 
-    if (['COMPLETED', 'CANCELLED', 'DISPUTED'].includes(task.status)) {
+    return this.executeCancel(task, userId);
+  }
+
+  /** G-2: admin recovery — force-cancel any non-terminal task (audit C-3). */
+  async forceCancel(taskId: string, adminPhone: string) {
+    const task = await this.prisma.task.findUnique({ where: { id: taskId } });
+    if (!task) throw new NotFoundException('Task not found');
+    return this.executeCancel(task, `admin:${adminPhone}`);
+  }
+
+  /**
+   * G-2: transactional cancel. Task CANCELLED (CAS) and HELD escrow →
+   * REFUND_PENDING commit atomically, so a crash can no longer strand a
+   * CANCELLED task with HELD money. The actual provider refund (G-1) runs
+   * post-commit; if it fails, the escrow is already REFUND_PENDING and the
+   * hourly reconcile sweep retries it. Write order (task, then escrow)
+   * matches the webhook transaction — no lock-order inversion.
+   */
+  private async executeCancel(
+    task: { id: string; status: string; posterId: string; doerId: string | null; paymentMode: string; title: string },
+    byUserId: string,
+  ) {
+    if (!(CANCELLABLE_STATUSES as readonly string[]).includes(task.status)) {
       throw new BadRequestException('Task cannot be cancelled in its current state');
     }
 
-    const updated = await this.prisma.task.update({
-      where: { id: taskId },
-      data: { status: 'CANCELLED' },
+    await this.prisma.$transaction(async (tx) => {
+      const cancelled = await tx.task.updateMany({
+        where: { id: task.id, status: { in: [...CANCELLABLE_STATUSES] } },
+        data: { status: 'CANCELLED' },
+      });
+      if (cancelled.count === 0) {
+        // Lost a race (double-cancel, or the webhook promoted/another actor
+        // finished the task first) — bail out without touching money.
+        throw new BadRequestException('Task cannot be cancelled in its current state');
+      }
+      if (task.paymentMode === 'ESCROW') {
+        await tx.escrow.updateMany({
+          where: { taskId: task.id, status: 'HELD' },
+          data: { status: 'REFUND_PENDING' },
+        });
+      }
     });
 
+    // G-1: auto-refund (approved decision #1). PENDING escrows hold no money,
+    // so only a REFUND_PENDING claim triggers the provider call.
     if (task.paymentMode === 'ESCROW') {
-      const escrow = await this.prisma.escrow.findUnique({ where: { taskId } });
-      if (escrow && escrow.status === 'HELD') {
-        await this.prisma.escrow.update({
-          where: { taskId },
-          data: { status: 'REFUNDED', refundedAt: new Date() },
-        });
+      const escrow = await this.prisma.escrow.findUnique({ where: { taskId: task.id } });
+      if (escrow && escrow.status === 'REFUND_PENDING') {
+        try {
+          await this.refunds.initiateForEscrow({
+            escrowId: escrow.id,
+            taskId: task.id,
+            reason: 'CANCEL',
+            initiatedBy: byUserId,
+          });
+        } catch {
+          // Never undo a committed cancel; the reconcile sweep retries.
+        }
       }
     }
 
     this.events.emit(NotificationEvent.TASK_CANCELLED, {
-      taskId,
+      taskId: task.id,
       posterId: task.posterId,
       doerId: task.doerId,
-      byUserId: userId,
+      byUserId,
       title: task.title,
     });
 
-    return updated;
+    return this.prisma.task.findUniqueOrThrow({ where: { id: task.id } });
   }
 
   async raiseDispute(taskId: string, userId: string, reason: string) {

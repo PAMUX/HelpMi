@@ -14,7 +14,7 @@ describe('SchedulerService.autoReleaseEscrows (P1-D)', () => {
   beforeEach(() => {
     prisma = buildPrismaMock();
     tasks = { releaseEscrow: jest.fn() };
-    service = new SchedulerService(prisma, tasks);
+    service = new SchedulerService(prisma, tasks, { reconcile: jest.fn() } as any);
   });
 
   it('queries only COMPLETED, unconfirmed, escrow-HELD tasks past the 24h cutoff', async () => {
@@ -59,5 +59,17 @@ describe('SchedulerService.autoReleaseEscrows (P1-D)', () => {
     const result = await service.autoReleaseEscrows();
 
     expect(result).toEqual({ scanned: 2, released: 1 });
+  });
+});
+
+describe('SchedulerService.reconcileRefunds (G-2 sweep)', () => {
+  it('delegates to RefundService.reconcile and reports the result', async () => {
+    const refunds = { reconcile: jest.fn().mockResolvedValue({ scanned: 3, completed: 2 }) } as any;
+    const service = new SchedulerService(buildPrismaMock(), { releaseEscrow: jest.fn() } as any, refunds);
+
+    const result = await service.reconcileRefunds();
+
+    expect(refunds.reconcile).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ scanned: 3, completed: 2 });
   });
 });

@@ -28,19 +28,24 @@ describe('PayoutService.createForEscrowRelease (P3-A)', () => {
     expect(prisma.payout.create).not.toHaveBeenCalled();
   });
 
-  it('wallet payout: creates PENDING then dispatches (PROCESSING)', async () => {
+  it('G-7A: a stored MOBILE_WALLET preference is coerced to BANK (launch scope)', async () => {
     prisma.payout.findUnique.mockResolvedValue(null);
     prisma.doerProfile.findUnique.mockResolvedValue({
       preferredPayoutMethod: 'MOBILE_WALLET', mobileWalletProvider: 'FriMi', mobileWalletNumber: '077',
+      bankAccountName: 'A. Perera', bankAccountNumber: '123456', bankName: 'ComBank',
     });
-    prisma.payout.create.mockResolvedValue({ id: 'po1', method: 'MOBILE_WALLET' });
+    prisma.payout.create.mockResolvedValue({ id: 'po1', method: 'BANK' });
+    provider.dispatch.mockResolvedValue({ status: 'PENDING' });
 
     const res = await service.createForEscrowRelease({ escrowId: 'e1', taskId: 't1', doerId: 'd1', amount: 1700 });
 
     expect(prisma.payout.create).toHaveBeenCalledTimes(1);
-    expect(prisma.payout.create.mock.calls[0][0].data.method).toBe('MOBILE_WALLET');
-    expect(provider.dispatch).toHaveBeenCalled();
-    expect(res.status).toBe('PROCESSING');
+    expect(prisma.payout.create.mock.calls[0][0].data.method).toBe('BANK');
+    expect(prisma.payout.create.mock.calls[0][0].data.destinationSnapshot).toEqual(
+      expect.objectContaining({ bankAccountNumber: '123456' }),
+    );
+    expect(provider.dispatch).toHaveBeenCalledWith(expect.objectContaining({ method: 'BANK' }));
+    expect(res.status).toBe('PENDING');
   });
 
   it('bank payout: stays PENDING for manual settlement', async () => {

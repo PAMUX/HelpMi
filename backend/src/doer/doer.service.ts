@@ -1,7 +1,13 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SubmitKycDto } from './dto/submit-kyc.dto.js';
 import { PayoutMethodDto } from './dto/payout-method.dto.js';
+import { kycKeyBelongsTo } from '../uploads/upload-purpose.js';
 
 @Injectable()
 export class DoerService {
@@ -17,6 +23,23 @@ export class DoerService {
   }
 
   async submitKyc(userId: string, dto: SubmitKycDto) {
+    // G-3 defense-in-depth: every submitted document key must live under the
+    // submitting user's own kyc/<subtype>/<userId>/ prefix. The DTO already
+    // enforces key shape; this stops a user persisting someone else's upload.
+    const documentKeys = [
+      dto.nicPhotoUrl,
+      dto.selfieUrl,
+      dto.addressProofUrl,
+      dto.policeClearanceUrl,
+      dto.drivingLicenseUrl,
+      dto.skillProofUrl,
+    ].filter((key): key is string => !!key);
+    for (const key of documentKeys) {
+      if (!kycKeyBelongsTo(key, userId)) {
+        throw new ForbiddenException('KYC document keys must come from your own uploads');
+      }
+    }
+
     const existing = await this.prisma.doerProfile.findUnique({ where: { userId } });
 
     if (existing && existing.kycStatus === 'APPROVED') {

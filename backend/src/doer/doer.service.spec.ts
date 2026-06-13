@@ -1,8 +1,10 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { DoerService } from './doer.service';
 
 // P1-A regression tests: KYC submission must persist payout fields without the
 // blind-spread runtime crash (B1), via explicit field mapping.
+// G-3: fixtures use private storage KEYS (the presign contract), and document
+// keys must belong to the submitting user.
 
 function buildPrismaMock() {
   return {
@@ -17,15 +19,16 @@ function buildPrismaMock() {
 }
 
 const baseDto = {
-  nicPhotoUrl: 'https://cdn.helpmi.lk/nic.jpg',
-  selfieUrl: 'https://cdn.helpmi.lk/selfie.jpg',
-  addressProofUrl: 'https://cdn.helpmi.lk/addr.jpg',
-  preferredPayoutMethod: 'MOBILE_WALLET' as const,
-  mobileWalletProvider: 'FriMi',
-  mobileWalletNumber: '0771234567',
+  nicPhotoUrl: 'kyc/nic/user1/aaaa-1111.jpg',
+  selfieUrl: 'kyc/selfie/user1/bbbb-2222.jpg',
+  addressProofUrl: 'kyc/address/user1/cccc-3333.jpg',
+  preferredPayoutMethod: 'BANK' as const,
+  bankAccountName: 'A. Perera',
+  bankAccountNumber: '100254789632',
+  bankName: 'Commercial Bank',
 };
 
-describe('DoerService.submitKyc (P1-A)', () => {
+describe('DoerService.submitKyc (P1-A / G-3)', () => {
   let prisma: any;
   let service: DoerService;
 
@@ -44,9 +47,9 @@ describe('DoerService.submitKyc (P1-A)', () => {
     const arg = prisma.doerProfile.upsert.mock.calls[0][0];
 
     // Known payout columns are mapped through...
-    expect(arg.create.preferredPayoutMethod).toBe('MOBILE_WALLET');
-    expect(arg.create.mobileWalletProvider).toBe('FriMi');
-    expect(arg.update.preferredPayoutMethod).toBe('MOBILE_WALLET');
+    expect(arg.create.preferredPayoutMethod).toBe('BANK');
+    expect(arg.create.bankAccountNumber).toBe('100254789632');
+    expect(arg.update.preferredPayoutMethod).toBe('BANK');
 
     // ...and the explicit map only contains real DoerProfile columns.
     const allowed = new Set([
@@ -80,6 +83,21 @@ describe('DoerService.submitKyc (P1-A)', () => {
     await expect(service.submitKyc('user1', baseDto as any)).rejects.toBeInstanceOf(
       ConflictException,
     );
+    expect(prisma.doerProfile.upsert).not.toHaveBeenCalled();
+  });
+
+  it('G-3: rejects document keys that belong to another user (no upsert)', async () => {
+    await expect(
+      service.submitKyc('user1', { ...baseDto, nicPhotoUrl: 'kyc/nic/user2/zzzz-9.jpg' } as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(prisma.doerProfile.findUnique).not.toHaveBeenCalled();
+    expect(prisma.doerProfile.upsert).not.toHaveBeenCalled();
+  });
+
+  it('G-3: rejects URL-shaped document values even at the service layer', async () => {
+    await expect(
+      service.submitKyc('user1', { ...baseDto, selfieUrl: 'https://cdn.helpmi.lk/s.jpg' } as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
     expect(prisma.doerProfile.upsert).not.toHaveBeenCalled();
   });
 });

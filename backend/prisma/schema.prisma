@@ -39,6 +39,9 @@ enum EscrowStatus {
   RELEASED
   REFUNDED
   DISPUTED
+  // G-1: refund decided (cancel/webhook-race/admin) but not yet confirmed by
+  // the payment provider. REFUNDED now means "provider confirmed money moved".
+  REFUND_PENDING
 }
 
 enum PayoutMethod {
@@ -184,7 +187,7 @@ model Task {
   budget             Decimal     @db.Decimal(10, 2)
   paymentMode        PaymentMode @default(ESCROW)
   requiredTier       DoerTier    @default(BRONZE)
-  status             TaskStatus  @default(OPEN)
+  status             TaskStatus  @default(OPEN) // @@index([status]) below (G-2)
   scheduledStart     DateTime?
   scheduledEnd       DateTime?
   doerId             String?
@@ -205,6 +208,8 @@ model Task {
   messages      Message[]
   dispute       Dispute?
   notifications Notification[]
+
+  @@index([status])
 }
 
 model Escrow {
@@ -218,7 +223,8 @@ model Escrow {
   trustFundReserve      Decimal      @db.Decimal(10, 2)
   netDoerPayout         Decimal?     @db.Decimal(10, 2)
   payherePaymentId      String?
-  payhereOrderId        String?
+  // G-2/B7-4: unique — webhook routing must never be ambiguous.
+  payhereOrderId        String?      @unique
   status                EscrowStatus @default(PENDING)
   payoutMethod          PayoutMethod @default(BANK)
   heldAt                DateTime?
@@ -227,7 +233,46 @@ model Escrow {
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
 
-  task Task @relation(fields: [taskId], references: [id])
+  task   Task    @relation(fields: [taskId], references: [id])
+  refund Refund?
+
+  @@index([status])
+}
+
+// --- G-1 (Sprint 2): refund ledger ---
+enum RefundReason {
+  CANCEL
+  DISPUTE
+  ADMIN
+}
+
+enum RefundStatus {
+  PENDING // queued (e.g. provider not configured yet) — reconcile retries
+  PROCESSING // provider call in flight
+  COMPLETED // provider confirmed; escrow becomes REFUNDED
+  FAILED // provider rejected; escrow stays REFUND_PENDING for retry
+}
+
+model Refund {
+  id              String       @id @default(uuid())
+  escrowId        String       @unique
+  taskId          String
+  amount          Decimal      @db.Decimal(10, 2)
+  reason          RefundReason
+  status          RefundStatus @default(PENDING)
+  providerRef     String?
+  failureReason   String?
+  initiatedBy     String // 'system:webhook' | 'system:reconcile' | user id | 'admin:<phone>'
+  lastAttemptedBy String?
+  attempts        Int          @default(0)
+  createdAt       DateTime     @default(now())
+  completedAt     DateTime?
+  updatedAt       DateTime     @updatedAt
+
+  escrow Escrow @relation(fields: [escrowId], references: [id])
+
+  @@index([status])
+  @@index([taskId])
 }
 
 model Rating {
@@ -330,7 +375,7 @@ model PostingFee {
   posterId         String
   amount           Decimal          @default(99.00) @db.Decimal(10, 2)
   status           PostingFeeStatus @default(PENDING)
-  payhereOrderId   String?
+  payhereOrderId   String?          @unique
   payherePaymentId String?
   paidAt           DateTime?
   createdAt        DateTime         @default(now())

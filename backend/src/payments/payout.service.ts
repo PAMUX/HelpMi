@@ -29,19 +29,16 @@ export class PayoutService {
     if (existing) return existing;
 
     const profile = await this.prisma.doerProfile.findUnique({ where: { userId: input.doerId } });
-    const method: PayoutMethod = profile?.preferredPayoutMethod ?? 'BANK';
-    const destinationSnapshot =
-      method === 'BANK'
-        ? {
-            bankAccountName: profile?.bankAccountName ?? null,
-            bankAccountNumber: profile?.bankAccountNumber ?? null,
-            bankName: profile?.bankName ?? null,
-            bankBranch: profile?.bankBranch ?? null,
-          }
-        : {
-            mobileWalletProvider: profile?.mobileWalletProvider ?? null,
-            mobileWalletNumber: profile?.mobileWalletNumber ?? null,
-          };
+    // G-7A (launch scope): force BANK regardless of stored preference until the
+    // wallet payout integration (G-7B) ships. Wallet preferences saved before
+    // this change settle via the bank CSV batch instead of fake-PROCESSING.
+    const method: PayoutMethod = 'BANK';
+    const destinationSnapshot = {
+      bankAccountName: profile?.bankAccountName ?? null,
+      bankAccountNumber: profile?.bankAccountNumber ?? null,
+      bankName: profile?.bankName ?? null,
+      bankBranch: profile?.bankBranch ?? null,
+    };
 
     let payout;
     try {

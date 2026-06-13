@@ -1,18 +1,22 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationEvent } from '../notifications/events/notification-events.js';
+import { RefundService } from './refund.service.js';
 
 const POSTING_FEE_LKR = 99;
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger('PaymentsService');
+
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
     private events: EventEmitter2,
+    private refunds: RefundService,
   ) {}
 
   async getEscrow(taskId: string, userId: string) {
@@ -51,7 +55,9 @@ export class PaymentsService {
     if (task.paymentMode === 'ESCROW') {
       if (!task.escrow) throw new NotFoundException('Escrow record not found');
       if (task.escrow.status !== 'PENDING') throw new BadRequestException('Payment already initiated');
-      orderId = `HM-${taskId.slice(0, 8).toUpperCase()}`;
+      // G-2/B7-4: full task UUID — 8-hex prefixes collide at scale, and
+      // payhereOrderId is now unique, so a collision would 500 the initiate.
+      orderId = `HM-${taskId.toUpperCase()}`;
       amount = Number(task.escrow.taskBudget) + Number(task.escrow.platformFeeFromPoster);
       await this.prisma.escrow.update({ where: { taskId }, data: { payhereOrderId: orderId } });
     } else {
@@ -59,7 +65,7 @@ export class PaymentsService {
       const fee = await this.prisma.postingFee.findUnique({ where: { taskId } });
       if (!fee) throw new NotFoundException('Posting fee record not found');
       if (fee.status !== 'PENDING') throw new BadRequestException('Posting fee already paid');
-      orderId = `HMF-${taskId.slice(0, 8).toUpperCase()}`;
+      orderId = `HMF-${taskId.toUpperCase()}`;
       amount = Number(fee.amount ?? POSTING_FEE_LKR);
       await this.prisma.postingFee.update({ where: { taskId }, data: { payhereOrderId: orderId } });
     }
@@ -73,13 +79,17 @@ export class PaymentsService {
     const baseUrl =
       mode === 'sandbox' ? 'https://sandbox.payhere.lk/pay/checkout' : 'https://www.payhere.lk/pay/checkout';
 
+    // G-8: callback URLs are environment-driven (previously hardcoded to
+    // helpmi.lk, which silently broke webhooks in any other environment).
+    const { returnUrl, cancelUrl, notifyUrl } = this.callbackUrls();
+
     return {
       checkoutUrl: baseUrl,
       params: {
         merchant_id: merchantId,
-        return_url: `https://helpmi.lk/payment/return`,
-        cancel_url: `https://helpmi.lk/payment/cancel`,
-        notify_url: `https://helpmi.lk/api/payments/webhook`,
+        return_url: returnUrl,
+        cancel_url: cancelUrl,
+        notify_url: notifyUrl,
         order_id: orderId,
         items: task.title,
         currency,
@@ -87,6 +97,30 @@ export class PaymentsService {
         hash,
       },
     };
+  }
+
+  /**
+   * G-8: derive PayHere callback URLs from APP_PUBLIC_BASE_URL, with optional
+   * explicit overrides (PAYHERE_RETURN_URL / PAYHERE_CANCEL_URL /
+   * PAYHERE_NOTIFY_URL). Fails fast with an actionable message when missing —
+   * a checkout whose webhook can never arrive must not be issued at all.
+   * Note: local sandbox testing needs a public tunnel (ngrok/cloudflared).
+   */
+  private callbackUrls(): { returnUrl: string; cancelUrl: string; notifyUrl: string } {
+    const base = (this.config.get<string>('APP_PUBLIC_BASE_URL') ?? '').trim().replace(/\/$/, '');
+    const pick = (key: string, fallback: string): string => {
+      const explicit = (this.config.get<string>(key) ?? '').trim();
+      return explicit || fallback;
+    };
+    const returnUrl = pick('PAYHERE_RETURN_URL', base ? `${base}/payment/return` : '');
+    const cancelUrl = pick('PAYHERE_CANCEL_URL', base ? `${base}/payment/cancel` : '');
+    const notifyUrl = pick('PAYHERE_NOTIFY_URL', base ? `${base}/api/payments/webhook` : '');
+    if (!returnUrl || !cancelUrl || !notifyUrl) {
+      throw new BadRequestException(
+        'Payment configuration incomplete: set APP_PUBLIC_BASE_URL (or PAYHERE_*_URL overrides)',
+      );
+    }
+    return { returnUrl, cancelUrl, notifyUrl };
   }
 
   async handleWebhook(body: Record<string, string>) {
@@ -118,6 +152,15 @@ export class PaymentsService {
     return { received: true };
   }
 
+  /**
+   * G-2: race-protected escrow funding. The task-promotion CAS runs FIRST and
+   * is the authority — money becomes HELD only when the task really moved
+   * PENDING_PAYMENT → OPEN. If the task was cancelled while the poster was
+   * paying, the captured payment is recorded and routed straight to the G-1
+   * refund lifecycle; a CANCELLED+HELD state can no longer be produced.
+   * Task-then-escrow write order matches cancel(), so the two transactions
+   * serialize on the task row without deadlock.
+   */
   private async applyEscrowPayment(
     escrow: { id: string; taskId: string; status: string; payherePaymentId: string | null },
     paymentId: string,
@@ -127,18 +170,60 @@ export class PaymentsService {
       return { received: true };
     }
 
-    const [, promoted] = await this.prisma.$transaction([
-      this.prisma.escrow.update({
-        where: { id: escrow.id },
-        data: { status: 'HELD', payherePaymentId: paymentId, heldAt: new Date() },
-      }),
-      this.prisma.task.updateMany({
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const promoted = await tx.task.updateMany({
         where: { id: escrow.taskId, status: 'PENDING_PAYMENT' },
         data: { status: 'OPEN' },
-      }),
-    ]);
+      });
 
-    if (promoted.count === 1) await this.announceTask(escrow.taskId);
+      if (promoted.count === 1) {
+        await tx.escrow.updateMany({
+          where: { id: escrow.id, status: 'PENDING' },
+          data: { status: 'HELD', payherePaymentId: paymentId, heldAt: new Date() },
+        });
+        return 'open' as const;
+      }
+
+      const task = await tx.task.findUnique({
+        where: { id: escrow.taskId },
+        select: { status: true },
+      });
+      if (!task || task.status === 'CANCELLED') {
+        // Money arrived for a dead task: capture the payment id and hand the
+        // funds to the refund lifecycle — never HELD.
+        await tx.escrow.updateMany({
+          where: { id: escrow.id, status: 'PENDING' },
+          data: { status: 'REFUND_PENDING', payherePaymentId: paymentId, heldAt: new Date() },
+        });
+        return 'refund' as const;
+      }
+
+      // Defensive: task already past PENDING_PAYMENT through some other path —
+      // hold the funds but don't re-announce.
+      await tx.escrow.updateMany({
+        where: { id: escrow.id, status: 'PENDING' },
+        data: { status: 'HELD', payherePaymentId: paymentId, heldAt: new Date() },
+      });
+      return 'held-only' as const;
+    });
+
+    if (outcome === 'open') {
+      await this.announceTask(escrow.taskId);
+    } else if (outcome === 'refund') {
+      try {
+        await this.refunds.initiateForEscrow({
+          escrowId: escrow.id,
+          taskId: escrow.taskId,
+          reason: 'CANCEL',
+          initiatedBy: 'system:webhook',
+        });
+      } catch (err) {
+        // Reconcile sweep retries REFUND_PENDING escrows; never fail the webhook.
+        this.logger.error(
+          `Refund initiation failed for escrow ${escrow.id}: ${(err as Error).message}`,
+        );
+      }
+    }
     return { received: true };
   }
 
@@ -150,18 +235,48 @@ export class PaymentsService {
       return { received: true };
     }
 
-    const [, promoted] = await this.prisma.$transaction([
-      this.prisma.postingFee.update({
-        where: { id: fee.id },
-        data: { status: 'PAID', payherePaymentId: paymentId, paidAt: new Date() },
-      }),
-      this.prisma.task.updateMany({
+    // G-2: same promote-first CAS as escrow funding. A fee landing on a
+    // cancelled task is recorded as REFUNDED (Rs. 99 — manual settlement via
+    // the admin payout/refund review; full automation rides with G-7B).
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const promoted = await tx.task.updateMany({
         where: { id: fee.taskId, status: 'PENDING_PAYMENT' },
         data: { status: 'OPEN' },
-      }),
-    ]);
+      });
 
-    if (promoted.count === 1) await this.announceTask(fee.taskId);
+      if (promoted.count === 1) {
+        await tx.postingFee.updateMany({
+          where: { id: fee.id, status: 'PENDING' },
+          data: { status: 'PAID', payherePaymentId: paymentId, paidAt: new Date() },
+        });
+        return 'open' as const;
+      }
+
+      const task = await tx.task.findUnique({
+        where: { id: fee.taskId },
+        select: { status: true },
+      });
+      if (!task || task.status === 'CANCELLED') {
+        await tx.postingFee.updateMany({
+          where: { id: fee.id, status: 'PENDING' },
+          data: { status: 'REFUNDED', payherePaymentId: paymentId, paidAt: new Date() },
+        });
+        return 'refund' as const;
+      }
+
+      await tx.postingFee.updateMany({
+        where: { id: fee.id, status: 'PENDING' },
+        data: { status: 'PAID', payherePaymentId: paymentId, paidAt: new Date() },
+      });
+      return 'held-only' as const;
+    });
+
+    if (outcome === 'open') await this.announceTask(fee.taskId);
+    if (outcome === 'refund') {
+      this.logger.warn(
+        `Posting fee for cancelled task ${fee.taskId} marked REFUNDED (payment ${paymentId}); settle manually`,
+      );
+    }
     return { received: true };
   }
 
